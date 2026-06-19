@@ -1,87 +1,48 @@
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
 public class Main {
     private static String currentDirectory;
     private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
+    private static int jobCounter = 1; // Tracks job numbers like [1], [2], etc.
 
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
-        InputStream inputStream = System.in;
+        Scanner scanner = new Scanner(System.in);
 
         while (true) {
             System.out.print("$ ");
             System.out.flush();
 
-            StringBuilder currentLine = new StringBuilder();
-            
-            while (true) {
-                int code;
-                try {
-                    code = inputStream.read();
-                } catch (IOException e) {
-                    break;
-                }
-
-                if (code == -1) {
-                    System.exit(0);
-                }
-
-                char ch = (char) code;
-
-                // Handle the Tab character injection
-                if (ch == '\t') {
-                    String partial = currentLine.toString();
-                    List<String> matches = new ArrayList<>();
-                    
-                    // We only want to autocomplete 'echo' and 'exit' for this stage
-                    for (String builtin : Arrays.asList("echo", "exit")) {
-                        if (builtin.startsWith(partial) && !partial.isEmpty()) {
-                            matches.add(builtin);
-                        }
-                    }
-
-                    // If there is exactly one clean matching prefix
-                    if (matches.size() == 1) {
-                        String matchedBuiltin = matches.get(0);
-                        String remainder = matchedBuiltin.substring(partial.length()) + " ";
-                        
-                        // Output the missing characters to the console immediately
-                        System.out.print(remainder);
-                        System.out.flush();
-                        
-                        // Append it internally to our active parsing line tracker
-                        currentLine.append(remainder);
-                    }
-                    continue;
-                }
-
-                // Handle Carriage Return / Line Feed execution break out
-                if (ch == '\n' || ch == '\r') {
-                    System.out.print("\n");
-                    System.out.flush();
-                    break;
-                }
-
-                // Normal Character input typing: manual echo back to match prompt
-                System.out.print(ch);
-                System.out.flush();
-                currentLine.append(ch);
+            if (!scanner.hasNextLine()) {
+                break;
             }
 
-            String input = currentLine.toString().trim();
+            String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 continue;
             }
 
+            boolean isBackground = false;
+            if (input.endsWith("&")) {
+                isBackground = true;
+                input = input.substring(0, input.length() - 1).trim();
+            }
+
             List<String> tokens = parseCommand(input);
             if (tokens.isEmpty()) continue;
+
+            // If the parsing left a trailing '&' token, clean it up
+            if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
+                isBackground = true;
+                tokens.remove(tokens.size() - 1);
+            }
 
             List<String> cmdArgs = new ArrayList<>();
             String stdoutFile = null;
@@ -172,7 +133,7 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Handled gracefully as empty shell operation block
+                    // Empty list output context placeholder
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
@@ -213,20 +174,33 @@ public class Main {
                     } else {
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
+                        
                         if (hasStdoutRedirect) {
                             if (isStdoutAppend) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
                             else pb.redirectOutput(stdoutFileObj);
                         } else {
                             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                         }
+                        
                         if (hasStderrRedirect) {
                             if (isStderrAppend) pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
                             else pb.redirectError(stderrFileObj);
                         } else {
                             pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                         }
+
                         Process process = pb.start();
-                        process.waitFor();
+
+                        if (isBackground) {
+                            // Print background tracking identifier immediately
+                            System.out.println("[" + jobCounter + "] " + process.pid());
+                            System.out.flush();
+                            jobCounter++;
+                            // Do NOT call process.waitFor() so the shell prompt returns immediately
+                        } else {
+                            // Foreground jobs block the loop until execution wraps up
+                            process.waitFor();
+                        }
                     }
                 }
             } catch (Exception e) {
