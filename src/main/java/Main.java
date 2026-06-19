@@ -115,7 +115,6 @@ public class Main {
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs();
                     }
-                    // Pass isStderrAppend flag: true = append, false = overwrite
                     errStream = new PrintStream(new FileOutputStream(stderrFileObj, isStderrAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
@@ -139,6 +138,8 @@ public class Main {
                     outStream.println();
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
+                } else if (command.equals("jobs")) {
+                    // Empty implementation for this stage - produces no output
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
@@ -167,7 +168,7 @@ public class Main {
                 } else if (command.equals("type")) {
                     if (cmdArgs.size() >= 2) {
                         String target = cmdArgs.get(1);
-                        if (target.equals("echo") || target.equals("exit") || target.equals("pwd") || target.equals("cd") || target.equals("type")) {
+                        if (target.equals("echo") || target.equals("exit") || target.equals("pwd") || target.equals("cd") || target.equals("type") || target.equals("jobs")) {
                             outStream.println(target + " is a shell builtin");
                         } else {
                             String execPath = findInPath(target);
@@ -276,41 +277,43 @@ public class Main {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
+                } else if (c == '1' && i + 2 < input.length() && input.charAt(i + 1) == ' Pand ' && input.charAt(i + 2) == '>') { // matching '1>>' safely
+                    // Handled inside direct char matching below
                 } else if (c == '1' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i += 2; // Step over '1>>'
+                    i += 2;
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_REDIRECT__");
-                    i++; // Step over '1>'
+                    i++;
                 } else if (c == '2' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_APPEND__");
-                    i += 2; // Step over '2>>'
+                    i += 2;
                 } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_REDIRECT__");
-                    i++; // Step over '2>'
+                    i++;
                 } else if (c == '>' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i++; // Step over second '>'
+                    i++;
                 } else if (c == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
