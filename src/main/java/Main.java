@@ -12,7 +12,6 @@ public class Main {
     private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
     private static int jobCounter = 1;
 
-    // Class to represent and track our background jobs
     private static class Job {
         int id;
         long pid;
@@ -27,7 +26,6 @@ public class Main {
         }
     }
 
-    // List to keep track of active background jobs
     private static final List<Job> activeJobs = new ArrayList<>();
 
     public static void main(String[] args) {
@@ -42,7 +40,6 @@ public class Main {
                 break;
             }
 
-            // Keep the original command string intact for background job tracking
             String rawInput = scanner.nextLine();
             String input = rawInput.trim();
             if (input.isEmpty()) {
@@ -152,10 +149,18 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Implement the jobs builtin formatting requirements
-                    for (Job job : activeJobs) {
+                    int size = activeJobs.size();
+                    for (int i = 0; i < size; i++) {
+                        Job job = activeJobs.get(i);
+                        char marker = ' ';
+                        if (i == size - 1) {
+                            marker = '+';
+                        } else if (i == size - 2) {
+                            marker = '-';
+                        }
+                        
                         String paddedStatus = String.format("%-24s", job.status);
-                        outStream.println("[" + job.id + "]+  " + paddedStatus + job.command);
+                        outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
                     }
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
@@ -222,7 +227,6 @@ public class Main {
                             System.out.println("[" + jobCounter + "] " + process.pid());
                             System.out.flush();
                             
-                            // Save job data to tracking list
                             activeJobs.add(new Job(jobCounter, process.pid(), rawInput.trim()));
                             jobCounter++;
                         } else {
