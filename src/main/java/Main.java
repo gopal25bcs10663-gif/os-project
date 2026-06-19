@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
 
@@ -17,12 +18,14 @@ public class Main {
         long pid;
         String command;
         String status;
+        Process process;
 
-        Job(int id, long pid, String command) {
+        Job(int id, long pid, String command, Process process) {
             this.id = id;
             this.pid = pid;
             this.command = command;
             this.status = "Running";
+            this.process = process;
         }
     }
 
@@ -149,18 +152,38 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
+                    // Update statuses prior to output calculation
+                    for (Job job : activeJobs) {
+                        if (job.status.equals("Running") && !job.process.isAlive()) {
+                            job.status = "Done";
+                            // Done status outputs omit trailing ampersands
+                            if (job.command.endsWith("&")) {
+                                job.command = job.command.substring(0, job.command.length() - 1).trim();
+                            }
+                        }
+                    }
+
                     int size = activeJobs.size();
-                    for (int i = 0; i < size; i++) {
-                        Job job = activeJobs.get(i);
+                    Iterator<Job> iterator = activeJobs.iterator();
+                    int index = 0;
+
+                    while (iterator.hasNext()) {
+                        Job job = iterator.next();
                         char marker = ' ';
-                        if (i == size - 1) {
+                        if (index == size - 1) {
                             marker = '+';
-                        } else if (i == size - 2) {
+                        } else if (index == size - 2) {
                             marker = '-';
                         }
-                        
+
                         String paddedStatus = String.format("%-24s", job.status);
                         outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
+
+                        // Safe removal hook for reaped/finished items
+                        if (job.status.equals("Done")) {
+                            iterator.remove();
+                        }
+                        index++;
                     }
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
@@ -227,7 +250,7 @@ public class Main {
                             System.out.println("[" + jobCounter + "] " + process.pid());
                             System.out.flush();
                             
-                            activeJobs.add(new Job(jobCounter, process.pid(), rawInput.trim()));
+                            activeJobs.add(new Job(jobCounter, process.pid(), rawInput.trim(), process));
                             jobCounter++;
                         } else {
                             process.waitFor();
@@ -236,7 +259,7 @@ public class Main {
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-            } finally {
+            } finaly {
                 if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
                 if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
             }
