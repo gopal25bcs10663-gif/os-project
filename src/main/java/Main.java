@@ -35,7 +35,7 @@ public class Main {
 
             char ch = input.charAt(i);
 
-            // Backslash escaping outside quotes
+            // Backslash escaping ONLY outside quotes
             if (ch == '\\' && !inSingleQuotes && !inDoubleQuotes) {
 
                 if (i + 1 < input.length()) {
@@ -58,7 +58,7 @@ public class Main {
                 continue;
             }
 
-            // Argument separator
+            // Whitespace separates arguments only outside quotes
             if (Character.isWhitespace(ch)
                     && !inSingleQuotes
                     && !inDoubleQuotes) {
@@ -148,15 +148,12 @@ public class Main {
                 File dir;
 
                 if (targetDir.equals("~")) {
-
                     dir = new File(System.getenv("HOME"));
-
-                } else if (targetDir.startsWith("/")) {
-
+                }
+                else if (targetDir.startsWith("/")) {
                     dir = new File(targetDir);
-
-                } else {
-
+                }
+                else {
                     dir = new File(currentDirectory, targetDir);
                 }
 
@@ -174,16 +171,14 @@ public class Main {
                     } else {
 
                         System.out.println(
-                                "cd: "
-                                        + targetDir
+                                "cd: " + targetDir
                                         + ": No such file or directory");
                     }
 
                 } catch (IOException e) {
 
                     System.out.println(
-                            "cd: "
-                                    + targetDir
+                            "cd: " + targetDir
                                     + ": No such file or directory");
                 }
             }
@@ -225,7 +220,7 @@ public class Main {
                 }
             }
 
-            // external commands
+            // External commands
             else {
 
                 String executablePath =
