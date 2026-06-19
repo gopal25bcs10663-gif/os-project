@@ -36,16 +36,15 @@ public class Main {
 
                 if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")) {
                     System.out.println(cmd + " is a shell builtin");
+                
                 } else {
                     String executablePath = findExecutable(cmd);
 
                     if (executablePath != null) {
                         System.out.println(cmd + " is " + executablePath);
                     } else {
-                        System.out.println(cmd + ": not found");
-                    }
-                } else {
                     System.out.println(cmd + ": not found");
+                    }
                 }
 
             } else {
