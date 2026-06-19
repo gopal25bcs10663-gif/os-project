@@ -1,11 +1,11 @@
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Scanner;
 
 public class Main {
     private static String currentDirectory;
@@ -13,17 +13,69 @@ public class Main {
 
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
-        Scanner scanner = new Scanner(System.in);
+        InputStream inputStream = System.in;
 
         while (true) {
             System.out.print("$ ");
             System.out.flush();
 
-            if (!scanner.hasNextLine()) {
-                break;
+            StringBuilder currentLine = new StringBuilder();
+            
+            while (true) {
+                int code;
+                try {
+                    code = inputStream.read();
+                } catch (IOException e) {
+                    break;
+                }
+
+                if (code == -1) {
+                    System.exit(0);
+                }
+
+                char ch = (char) code;
+
+                // Handle the Tab character injection
+                if (ch == '\t') {
+                    String partial = currentLine.toString();
+                    List<String> matches = new ArrayList<>();
+                    
+                    // We only want to autocomplete 'echo' and 'exit' for this stage
+                    for (String builtin : Arrays.asList("echo", "exit")) {
+                        if (builtin.startsWith(partial) && !partial.isEmpty()) {
+                            matches.add(builtin);
+                        }
+                    }
+
+                    // If there is exactly one clean matching prefix
+                    if (matches.size() == 1) {
+                        String matchedBuiltin = matches.get(0);
+                        String remainder = matchedBuiltin.substring(partial.length()) + " ";
+                        
+                        // Output the missing characters to the console immediately
+                        System.out.print(remainder);
+                        System.out.flush();
+                        
+                        // Append it internally to our active parsing line tracker
+                        currentLine.append(remainder);
+                    }
+                    continue;
+                }
+
+                // Handle Carriage Return / Line Feed execution break out
+                if (ch == '\n' || ch == '\r') {
+                    System.out.print("\n");
+                    System.out.flush();
+                    break;
+                }
+
+                // Normal Character input typing: manual echo back to match prompt
+                System.out.print(ch);
+                System.out.flush();
+                currentLine.append(ch);
             }
 
-            String input = scanner.nextLine().trim();
+            String input = currentLine.toString().trim();
             if (input.isEmpty()) {
                 continue;
             }
@@ -120,7 +172,7 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Stage #AF3 requirement: outputs nothing for now when empty
+                    // Handled gracefully as empty shell operation block
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
