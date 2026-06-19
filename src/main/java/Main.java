@@ -28,6 +28,9 @@ public class Main {
 
         while (scanner.hasNextLine()) {
             System.out.print("$ ");
+            if (!scanner.hasNextLine()) {
+                break;
+            }
             String input = scanner.nextLine();
 
             if (input.equals("exit") || input.equals("exit 0")) {
