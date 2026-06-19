@@ -35,9 +35,9 @@ public class Main {
 
                 char ch = (char) code;
 
-                // Handle Tab Key
+                // Detect the Tab key
                 if (ch == '\t') {
-                    String partial = currentLine.toString().trim();
+                    String partial = currentLine.toString();
                     List<String> matches = new ArrayList<>();
                     for (String builtin : BUILTINS) {
                         if (builtin.startsWith(partial)) {
@@ -45,33 +45,32 @@ public class Main {
                         }
                     }
 
-                    // If there is exactly one matching builtin, autocomplete it!
+                    // Exactly one unique match found
                     if (matches.size() == 1) {
                         String matchedBuiltin = matches.get(0);
-                        // Determine what's missing to finish the word
-                        String dynamicAddition = matchedBuiltin.substring(partial.length()) + " ";
+                        // Extract what needs to be appended (plus trailing space)
+                        String remainder = matchedBuiltin.substring(partial.length()) + " ";
                         
-                        // Print the missing piece back out to the terminal line
-                        System.out.print(dynamicAddition);
+                        System.out.print(remainder);
                         System.out.flush();
                         
-                        // Append it to our tracking string buffer
-                        currentLine.append(dynamicAddition);
+                        currentLine.append(remainder);
                     } else {
-                        // Optional: System.out.print("\u0007"); // Bell sound if multiple or no matches
-                        // For this stage, we just don't mutate if it's ambiguous
+                        // If there are multiple matches or no matches, ring the terminal bell
+                        System.out.print("\u0007");
+                        System.out.flush();
                     }
                     continue;
                 }
 
-                // Handle Enter Key (End of Command)
+                // Detect return / line feed execution
                 if (ch == '\n' || ch == '\r') {
-                    System.out.print(ch);
+                    System.out.print("\n");
                     System.out.flush();
                     break;
                 }
 
-                // Normal Character Echoing
+                // Normal character input handling
                 System.out.print(ch);
                 System.out.flush();
                 currentLine.append(ch);
@@ -82,7 +81,6 @@ public class Main {
                 continue;
             }
 
-            // --- The rest of your command parsing and execution logic ---
             List<String> tokens = parseCommand(input);
             if (tokens.isEmpty()) continue;
 
@@ -113,7 +111,7 @@ public class Main {
                     if (i + 1 < tokens.size()) {
                         stderrFile = tokens.get(i + 1);
                         hasStderrRedirect = true;
-                        isStderrAppend = false;
+                        isStdoutAppend = false;
                         i++;
                     }
                 } else if (tokens.get(i).equals("__STDERR_APPEND__")) {
@@ -175,7 +173,7 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Empty 
+                    // Empty matching logic block for current step
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
