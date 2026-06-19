@@ -26,6 +26,9 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
 
+        // Current working directory maintained by the shell
+        String currentDirectory = System.getProperty("user.dir");
+
         while (true) {
             System.out.print("$ ");
             System.out.flush();
@@ -48,7 +51,21 @@ public class Main {
 
             // pwd
             else if (input.equals("pwd")) {
-                System.out.println(System.getProperty("user.dir"));
+                System.out.println(currentDirectory);
+            }
+
+            // cd
+            else if (input.startsWith("cd ")) {
+                String targetDir = input.substring(3).trim();
+
+                File dir = new File(targetDir);
+
+                if (dir.exists() && dir.isDirectory()) {
+                    currentDirectory = dir.getAbsolutePath();
+                } else {
+                    System.out.println(
+                            "cd: " + targetDir + ": No such file or directory");
+                }
             }
 
             // type
@@ -58,7 +75,8 @@ public class Main {
                 if (cmd.equals("echo")
                         || cmd.equals("exit")
                         || cmd.equals("type")
-                        || cmd.equals("pwd")) {
+                        || cmd.equals("pwd")
+                        || cmd.equals("cd")) {
 
                     System.out.println(cmd + " is a shell builtin");
                 } else {
@@ -82,6 +100,10 @@ public class Main {
                 if (executablePath != null) {
 
                     ProcessBuilder pb = new ProcessBuilder(parts);
+
+                    // Run command from current shell directory
+                    pb.directory(new File(currentDirectory));
+
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
@@ -90,6 +112,7 @@ public class Main {
                             new InputStreamReader(process.getInputStream()));
 
                     String line;
+
                     while ((line = reader.readLine()) != null) {
                         System.out.println(line);
                     }
