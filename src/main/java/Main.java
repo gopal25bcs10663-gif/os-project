@@ -36,14 +36,17 @@ public class Main {
 
             String input = scanner.nextLine();
 
+            // exit
             if (input.equals("exit") || input.equals("exit 0")) {
                 break;
             }
 
+            // echo
             else if (input.startsWith("echo ")) {
                 System.out.println(input.substring(5));
             }
 
+            // type
             else if (input.startsWith("type ")) {
                 String cmd = input.substring(5);
 
@@ -63,6 +66,7 @@ public class Main {
                 }
             }
 
+            // external commands
             else {
                 String[] parts = input.split("\\s+");
                 String command = parts[0];
@@ -71,21 +75,13 @@ public class Main {
 
                 if (executablePath != null) {
 
-                    List<String> commandWithArgs = new ArrayList<>();
-                    commandWithArgs.add(executablePath);
-
-                    for (int i = 1; i < parts.length; i++) {
-                        commandWithArgs.add(parts[i]);
-                    }
-
-                    ProcessBuilder pb = new ProcessBuilder(commandWithArgs);
+                    ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
 
-                    BufferedReader reader =
-                            new BufferedReader(
-                                    new InputStreamReader(process.getInputStream()));
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(process.getInputStream()));
 
                     String line;
                     while ((line = reader.readLine()) != null) {
