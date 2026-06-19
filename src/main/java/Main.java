@@ -1,4 +1,3 @@
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -17,14 +16,22 @@ public class Main {
         long pid;
         String command;
         String status;
-        Process process;
+        List<Process> processes; // Track list of processes for pipeline structures
 
-        Job(int id, long pid, String command, Process process) {
+        Job(int id, long pid, String command, List<Process> processes) {
             this.id = id;
             this.pid = pid;
             this.command = command;
             this.status = "Running";
-            this.process = process;
+            this.processes = processes;
+        }
+
+        // A pipeline job is alive if any of its individual processes are still active
+        boolean isAlive() {
+            for (Process p : processes) {
+                if (p.isAlive()) return true;
+            }
+            return false;
         }
     }
 
@@ -32,7 +39,7 @@ public class Main {
 
     private static void reapBackgroundJobs(PrintStream outStream) {
         for (Job job : activeJobs) {
-            if (job.status.equals("Running") && !job.process.isAlive()) {
+            if (job.status.equals("Running") && !job.isAlive()) {
                 job.status = "Done";
                 if (job.command.endsWith("&")) {
                     job.command = job.command.substring(0, job.command.length() - 1).trim();
@@ -60,7 +67,7 @@ public class Main {
     private static void reapBeforePrompt(PrintStream outStream) {
         boolean hasDoneJobs = false;
         for (Job job : activeJobs) {
-            if (job.status.equals("Running") && !job.process.isAlive()) {
+            if (job.status.equals("Running") && !job.isAlive()) {
                 job.status = "Done";
                 if (job.command.endsWith("&")) {
                     job.command = job.command.substring(0, job.command.length() - 1).trim();
@@ -123,6 +130,18 @@ public class Main {
                 tokens.remove(tokens.size() - 1);
             }
 
+            // Detect Pipeline splitting point
+            int pipeIndex = tokens.indexOf("|");
+            if (pipeIndex != -1) {
+                // Pipeline branch
+                List<String> firstCmdTokens = tokens.subList(0, pipeIndex);
+                List<String> secondCmdTokens = tokens.subList(pipeIndex + 1, tokens.size());
+
+                executePipeline(firstCmdTokens, secondCmdTokens, isBackground, rawInput.trim());
+                continue;
+            }
+
+            // Normal Execution flow (Single Command)
             List<String> cmdArgs = new ArrayList<>();
             String stdoutFile = null;
             String stderrFile = null;
@@ -275,7 +294,6 @@ public class Main {
                         Process process = pb.start();
 
                         if (isBackground) {
-                            // Calculate the assigned job number dynamically
                             int nextJobId = 1;
                             if (!activeJobs.isEmpty()) {
                                 nextJobId = activeJobs.get(activeJobs.size() - 1).id + 1;
@@ -284,7 +302,7 @@ public class Main {
                             System.out.println("[" + nextJobId + "] " + process.pid());
                             System.out.flush();
                             
-                            activeJobs.add(new Job(nextJobId, process.pid(), rawInput.trim(), process));
+                            activeJobs.add(new Job(nextJobId, process.pid(), rawInput.trim(), Arrays.asList(process)));
                         } else {
                             process.waitFor();
                         }
@@ -296,6 +314,57 @@ public class Main {
                 if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
                 if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
             }
+        }
+    }
+
+    private static void executePipeline(List<String> firstTokens, List<String> secondTokens, boolean isBackground, String originalCommand) {
+        try {
+            if (firstTokens.isEmpty() || secondTokens.isEmpty()) return;
+
+            String cmd1 = firstTokens.get(0);
+            String path1 = findInPath(cmd1);
+            String cmd2 = secondTokens.get(0);
+            String path2 = findInPath(cmd2);
+
+            if (path1 == null) {
+                System.out.println(cmd1 + ": not found");
+                return;
+            }
+            if (path2 == null) {
+                System.out.println(cmd2 + ": not found");
+                return;
+            }
+
+            // Absolute paths setup
+            firstTokens.set(0, path1);
+            secondTokens.set(0, path2);
+
+            ProcessBuilder pb1 = new ProcessBuilder(firstTokens).directory(new File(currentDirectory));
+            ProcessBuilder pb2 = new ProcessBuilder(secondTokens).directory(new File(currentDirectory));
+
+            // Use ProcessBuilder native startPipeline capability
+            List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(pb1, pb2));
+
+            if (isBackground) {
+                int nextJobId = 1;
+                if (!activeJobs.isEmpty()) {
+                    nextJobId = activeJobs.get(activeJobs.size() - 1).id + 1;
+                }
+                
+                // Track standard PID mapping to the final consumer of the pipeline
+                long rootPid = pipeline.get(pipeline.size() - 1).pid();
+                System.out.println("[" + nextJobId + "] " + rootPid);
+                System.out.flush();
+
+                activeJobs.add(new Job(nextJobId, rootPid, originalCommand, pipeline));
+            } else {
+                // Foreground pipeline blocks until the last consumer process finishes execution
+                for (Process p : pipeline) {
+                    p.waitFor();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -339,6 +408,12 @@ public class Main {
                     inSingleQuote = true;
                 } else if (c == '"') {
                     inDoubleQuote = true;
+                } else if (c == '|') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("|");
                 } else if (Character.isWhitespace(c)) {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
