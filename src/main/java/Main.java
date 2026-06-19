@@ -337,9 +337,9 @@ public class Main {
             ProcessBuilder pb1 = new ProcessBuilder(firstTokens).directory(new File(currentDirectory));
             ProcessBuilder pb2 = new ProcessBuilder(secondTokens).directory(new File(currentDirectory));
 
-            // Inherit environment input/output loops cleanly so data targets terminal streams
-            pb1.inheritIO();
-            pb2.inheritIO();
+            // Only redirect the final consumer's output to the console terminal
+            pb2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            pb2.redirectError(ProcessBuilder.Redirect.INHERIT);
 
             List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(pb1, pb2));
 
