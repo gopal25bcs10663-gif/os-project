@@ -95,8 +95,73 @@ public class Main {
         }
     }
 
+    // Process a standalone command token group (used for isolated builtins execution)
+    private static void executeSingleCommandTokens(List<String> tokens, PrintStream outStream, PrintStream errStream) {
+        if (tokens.isEmpty()) return;
+        String command = tokens.get(0);
+
+        try {
+            if (command.equals("exit")) {
+                System.exit(0);
+            } else if (command.equals("echo")) {
+                for (int i = 1; i < tokens.size(); i++) {
+                    outStream.print(tokens.get(i));
+                    if (i < tokens.size() - 1) outStream.print(" ");
+                }
+                outStream.println();
+            } else if (command.equals("pwd")) {
+                outStream.println(currentDirectory);
+            } else if (command.equals("jobs")) {
+                reapBackgroundJobs(outStream);
+            } else if (command.equals("type")) {
+                if (tokens.size() >= 2) {
+                    String target = tokens.get(1);
+                    if (BUILTINS.contains(target)) {
+                        outStream.println(target + " is a shell builtin");
+                    } else {
+                        String execPath = findInPath(target);
+                        if (execPath != null) {
+                            outStream.println(target + " is " + execPath);
+                        } else {
+                            outStream.println(target + ": not found");
+                        }
+                    }
+                }
+            } else if (command.equals("cd")) {
+                if (tokens.size() < 2) {
+                    String home = System.getenv("HOME");
+                    if (home != null) currentDirectory = home;
+                } else {
+                    String path = tokens.get(1);
+                    if (path.equals("~")) {
+                        String home = System.getenv("HOME");
+                        if (home != null) currentDirectory = home;
+                    } else {
+                        File targetDir = new File(path);
+                        if (!targetDir.isAbsolute()) targetDir = new File(currentDirectory, path);
+                        if (targetDir.exists() && targetDir.isDirectory()) {
+                            currentDirectory = targetDir.getCanonicalPath();
+                        } else {
+                            errStream.println("cd: " + path + ": No such file or directory");
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace(errStream);
+        }
+    }
+
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
+
+        // Sub-execution route for handling pipelined builtins directly without interactive clutter
+        if (args.length >= 2 && args[0].equals("-c")) {
+            List<String> parsedArgs = parseCommand(args[1]);
+            executeSingleCommandTokens(parsedArgs, System.out, System.err);
+            System.exit(0);
+        }
+
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
@@ -213,55 +278,13 @@ public class Main {
                 }
             }
 
-            try {
-                String command = cmdArgs.get(0);
-
-                if (command.equals("exit")) {
-                    System.exit(0);
-                } else if (command.equals("echo")) {
-                    for (int i = 1; i < cmdArgs.size(); i++) {
-                        outStream.print(cmdArgs.get(i));
-                        if (i < cmdArgs.size() - 1) outStream.print(" ");
-                    }
-                    outStream.println();
-                } else if (command.equals("pwd")) {
-                    outStream.println(currentDirectory);
-                } else if (command.equals("jobs")) {
-                    reapBackgroundJobs(outStream);
-                } else if (command.equals("cd")) {
-                    if (cmdArgs.size() < 2) {
-                        String home = System.getenv("HOME");
-                        if (home != null) currentDirectory = home;
-                    } else {
-                        String path = cmdArgs.get(1);
-                        if (path.equals("~")) {
-                            String home = System.getenv("HOME");
-                            if (home != null) currentDirectory = home;
-                        } else {
-                            File targetDir = new File(path);
-                            if (!targetDir.isAbsolute()) targetDir = new File(currentDirectory, path);
-                            if (targetDir.exists() && targetDir.isDirectory()) {
-                                currentDirectory = targetDir.getCanonicalPath();
-                            } else {
-                                errStream.println("cd: " + path + ": No such file or directory");
-                            }
-                        }
-                    }
-                } else if (command.equals("type")) {
-                    if (cmdArgs.size() >= 2) {
-                        String target = cmdArgs.get(1);
-                        if (BUILTINS.contains(target)) {
-                            outStream.println(target + " is a shell builtin");
-                        } else {
-                            String execPath = findInPath(target);
-                            if (execPath != null) {
-                                outStream.println(target + " is " + execPath);
-                            } else {
-                                outStream.println(target + ": not found");
-                            }
-                        }
-                    }
-                } else {
+            if (BUILTINS.contains(cmdArgs.get(0))) {
+                executeSingleCommandTokens(cmdArgs, outStream, errStream);
+                if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
+                if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
+            } else {
+                try {
+                    String command = cmdArgs.get(0);
                     String execPath = findInPath(command);
                     if (execPath == null) {
                         outStream.println(command + ": not found");
@@ -303,12 +326,12 @@ public class Main {
                             process.waitFor();
                         }
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
+                    if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
-                if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
             }
         }
     }
@@ -322,7 +345,6 @@ public class Main {
 
             if (pb1 == null || pb2 == null) return;
 
-            // Only redirect the final consumer's output to the console terminal
             pb2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
             pb2.redirectError(ProcessBuilder.Redirect.INHERIT);
 
@@ -349,28 +371,24 @@ public class Main {
         }
     }
 
-    // Helper to evaluate execution targets and wrap builtins into an isolated command execution context
     private static ProcessBuilder createProcessBuilderForStage(List<String> stageTokens) {
         String baseCommand = stageTokens.get(0);
 
         if (BUILTINS.contains(baseCommand)) {
-            // Reconstruct string to execute internally using shell execution logic context
             StringBuilder cmdString = new StringBuilder();
             for (int i = 0; i < stageTokens.size(); i++) {
                 cmdString.append(stageTokens.get(i));
                 if (i < stageTokens.size() - 1) cmdString.append(" ");
             }
             
-            // Invoke dynamic wrapping to intercept execution context inside our program runtime
-            File shellScript = new File("./your_program.sh");
-            if (shellScript.exists()) {
-                return new ProcessBuilder("/bin/sh", "-c", "./your_program.sh << 'EOF'\n" + cmdString.toString() + "\nEOF")
-                        .directory(new File(currentDirectory));
-            } else {
-                // Fallback to standard command interpreter context if target runtime wrapper missing
-                return new ProcessBuilder("/bin/sh", "-c", "echo \"" + cmdString.toString() + "\"")
-                        .directory(new File(currentDirectory));
-            }
+            // Query current runtime's Java installation executable path
+            String javaHome = System.getProperty("java.home");
+            String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
+            String classpath = System.getProperty("java.class.path");
+
+            // Direct execution string route into an isolated, clean non-interactive java wrapper thread
+            return new ProcessBuilder(javaBin, "-cp", classpath, "Main", "-c", cmdString.toString())
+                    .directory(new File(currentDirectory));
         } else {
             String path = findInPath(baseCommand);
             if (path == null) {
