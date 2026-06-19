@@ -23,26 +23,41 @@ public class Main {
         return null;
     }
 
-    // Parse command line with single quote support
     private static List<String> parseCommand(String input) {
         List<String> tokens = new ArrayList<>();
 
         StringBuilder current = new StringBuilder();
+
         boolean inSingleQuotes = false;
+        boolean inDoubleQuotes = false;
 
         for (int i = 0; i < input.length(); i++) {
+
             char ch = input.charAt(i);
 
-            if (ch == '\'') {
+            // Single quotes
+            if (ch == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
-            } else if (Character.isWhitespace(ch) && !inSingleQuotes) {
+            }
+
+            // Double quotes
+            else if (ch == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+            }
+
+            // Whitespace outside quotes separates arguments
+            else if (Character.isWhitespace(ch)
+                    && !inSingleQuotes
+                    && !inDoubleQuotes) {
 
                 if (current.length() > 0) {
                     tokens.add(current.toString());
                     current.setLength(0);
                 }
+            }
 
-            } else {
+            // Normal character
+            else {
                 current.append(ch);
             }
         }
@@ -139,7 +154,8 @@ public class Main {
                     if (canonicalDir.exists()
                             && canonicalDir.isDirectory()) {
 
-                        currentDirectory = canonicalDir.getAbsolutePath();
+                        currentDirectory =
+                                canonicalDir.getAbsolutePath();
 
                     } else {
 
@@ -171,32 +187,42 @@ public class Main {
                         || cmd.equals("pwd")
                         || cmd.equals("cd")) {
 
-                    System.out.println(cmd + " is a shell builtin");
+                    System.out.println(
+                            cmd + " is a shell builtin");
 
                 } else {
 
-                    String executablePath = findExecutable(cmd);
+                    String executablePath =
+                            findExecutable(cmd);
 
                     if (executablePath != null) {
+
                         System.out.println(
-                                cmd + " is " + executablePath);
+                                cmd + " is "
+                                        + executablePath);
+
                     } else {
-                        System.out.println(cmd + ": not found");
+
+                        System.out.println(
+                                cmd + ": not found");
                     }
                 }
             }
 
-            // external commands
+            // External commands
             else {
 
-                String executablePath = findExecutable(command);
+                String executablePath =
+                        findExecutable(command);
 
                 if (executablePath != null) {
 
                     ProcessBuilder pb =
                             new ProcessBuilder(tokens);
 
-                    pb.directory(new File(currentDirectory));
+                    pb.directory(
+                            new File(currentDirectory));
+
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
