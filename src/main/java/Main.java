@@ -95,7 +95,6 @@ public class Main {
         }
     }
 
-    // Process a standalone command token group (used for isolated builtins execution)
     private static void executeSingleCommandTokens(List<String> tokens, PrintStream outStream, PrintStream errStream) {
         if (tokens.isEmpty()) return;
         String command = tokens.get(0);
@@ -155,7 +154,6 @@ public class Main {
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
 
-        // Sub-execution route for handling pipelined builtins directly without interactive clutter
         if (args.length >= 2 && args[0].equals("-c")) {
             List<String> parsedArgs = parseCommand(args[1]);
             executeSingleCommandTokens(parsedArgs, System.out, System.err);
@@ -194,12 +192,9 @@ public class Main {
                 tokens.remove(tokens.size() - 1);
             }
 
-            int pipeIndex = tokens.indexOf("|");
-            if (pipeIndex != -1) {
-                List<String> firstCmdTokens = tokens.subList(0, pipeIndex);
-                List<String> secondCmdTokens = tokens.subList(pipeIndex + 1, tokens.size());
-
-                executePipeline(firstCmdTokens, secondCmdTokens, isBackground, rawInput.trim());
+            // Check for pipes
+            if (tokens.contains("|")) {
+                executePipeline(tokens, isBackground, rawInput.trim());
                 continue;
             }
 
@@ -336,19 +331,41 @@ public class Main {
         }
     }
 
-    private static void executePipeline(List<String> firstTokens, List<String> secondTokens, boolean isBackground, String originalCommand) {
+    private static void executePipeline(List<String> tokens, boolean isBackground, String originalCommand) {
         try {
-            if (firstTokens.isEmpty() || secondTokens.isEmpty()) return;
+            List<List<String>> dynamicStages = new ArrayList<>();
+            List<String> currentStage = new ArrayList<>();
 
-            ProcessBuilder pb1 = createProcessBuilderForStage(firstTokens);
-            ProcessBuilder pb2 = createProcessBuilderForStage(secondTokens);
+            // Parse pipeline tokens into an ordered layout of commands
+            for (String token : tokens) {
+                if (token.equals("|")) {
+                    if (!currentStage.isEmpty()) {
+                        dynamicStages.add(new ArrayList<>(currentStage));
+                        currentStage.clear();
+                    }
+                } else {
+                    currentStage.add(token);
+                }
+            }
+            if (!currentStage.isEmpty()) {
+                dynamicStages.add(currentStage);
+            }
 
-            if (pb1 == null || pb2 == null) return;
+            if (dynamicStages.isEmpty()) return;
 
-            pb2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-            pb2.redirectError(ProcessBuilder.Redirect.INHERIT);
+            List<ProcessBuilder> builders = new ArrayList<>();
+            for (List<String> stageTokens : dynamicStages) {
+                ProcessBuilder pb = createProcessBuilderForStage(stageTokens);
+                if (pb == null) return; // Command missing or invalid path
+                builders.add(pb);
+            }
 
-            List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(pb1, pb2));
+            // Route final pipeline consumer back to interactive shell standards
+            ProcessBuilder finalBuilder = builders.get(builders.size() - 1);
+            finalBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            finalBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+            List<Process> pipeline = ProcessBuilder.startPipeline(builders);
 
             if (isBackground) {
                 int nextJobId = 1;
@@ -381,12 +398,10 @@ public class Main {
                 if (i < stageTokens.size() - 1) cmdString.append(" ");
             }
             
-            // Query current runtime's Java installation executable path
             String javaHome = System.getProperty("java.home");
             String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
             String classpath = System.getProperty("java.class.path");
 
-            // Direct execution string route into an isolated, clean non-interactive java wrapper thread
             return new ProcessBuilder(javaBin, "-cp", classpath, "Main", "-c", cmdString.toString())
                     .directory(new File(currentDirectory));
         } else {
