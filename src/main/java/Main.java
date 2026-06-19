@@ -12,6 +12,24 @@ public class Main {
     private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
     private static int jobCounter = 1;
 
+    // Class to represent and track our background jobs
+    private static class Job {
+        int id;
+        long pid;
+        String command;
+        String status;
+
+        Job(int id, long pid, String command) {
+            this.id = id;
+            this.pid = pid;
+            this.command = command;
+            this.status = "Running";
+        }
+    }
+
+    // List to keep track of active background jobs
+    private static final List<Job> activeJobs = new ArrayList<>();
+
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
         Scanner scanner = new Scanner(System.in);
@@ -24,7 +42,9 @@ public class Main {
                 break;
             }
 
-            String input = scanner.nextLine().trim();
+            // Keep the original command string intact for background job tracking
+            String rawInput = scanner.nextLine();
+            String input = rawInput.trim();
             if (input.isEmpty()) {
                 continue;
             }
@@ -132,7 +152,11 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Placeholder logic block
+                    // Implement the jobs builtin formatting requirements
+                    for (Job job : activeJobs) {
+                        String paddedStatus = String.format("%-24s", job.status);
+                        outStream.println("[" + job.id + "]+  " + paddedStatus + job.command);
+                    }
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
@@ -174,11 +198,9 @@ public class Main {
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
                         
-                        // If no redirect flags were explicitly passed, inherit terminal standard streams directly
                         if (!hasStdoutRedirect && !hasStderrRedirect) {
                             pb.inheritIO();
                         } else {
-                            // Specific file descriptor redirections fallback
                             if (hasStdoutRedirect) {
                                 if (isStdoutAppend) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
                                 else pb.redirectOutput(stdoutFileObj);
@@ -199,6 +221,9 @@ public class Main {
                         if (isBackground) {
                             System.out.println("[" + jobCounter + "] " + process.pid());
                             System.out.flush();
+                            
+                            // Save job data to tracking list
+                            activeJobs.add(new Job(jobCounter, process.pid(), rawInput.trim()));
                             jobCounter++;
                         } else {
                             process.waitFor();
