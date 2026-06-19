@@ -25,109 +25,108 @@ public class Main {
 
     private static List<String> parseCommand(String input) {
 
-    List<String> tokens = new ArrayList<>();
-    StringBuilder current = new StringBuilder();
+        List<String> tokens = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
 
-    boolean inSingleQuotes = false;
-    boolean inDoubleQuotes = false;
+        boolean inSingleQuotes = false;
+        boolean inDoubleQuotes = false;
 
-    for (int i = 0; i < input.length(); i++) {
+        for (int i = 0; i < input.length(); i++) {
 
-        char ch = input.charAt(i);
+            char ch = input.charAt(i);
 
-        // Inside single quotes: everything is literal
-        if (inSingleQuotes) {
+            // Inside single quotes
+            if (inSingleQuotes) {
 
-            if (ch == '\'') {
-                inSingleQuotes = false;
-            } else {
-                current.append(ch);
-            }
-
-            continue;
-        }
-
-        // Inside double quotes
-        if (inDoubleQuotes) {
-
-            if (ch == '\\') {
-
-                if (i + 1 < input.length()) {
-
-                    char next = input.charAt(i + 1);
-
-                    // Only \" and \\ are special in this stage
-                    if (next == '"' || next == '\\') {
-                        current.append(next);
-                        i++;
-                    } else {
-                        current.append('\\');
-                        current.append(next);
-                        i++;
-                    }
-
+                if (ch == '\'') {
+                    inSingleQuotes = false;
                 } else {
-                    current.append('\\');
+                    current.append(ch);
                 }
 
                 continue;
             }
 
+            // Inside double quotes
+            if (inDoubleQuotes) {
+
+                if (ch == '\\') {
+
+                    if (i + 1 < input.length()) {
+
+                        char next = input.charAt(i + 1);
+
+                        if (next == '"' || next == '\\') {
+                            current.append(next);
+                            i++;
+                        } else {
+                            current.append('\\');
+                            current.append(next);
+                            i++;
+                        }
+
+                    } else {
+                        current.append('\\');
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"') {
+                    inDoubleQuotes = false;
+                    continue;
+                }
+
+                current.append(ch);
+                continue;
+            }
+
+            // Outside quotes: backslash escapes next char
+            if (ch == '\\') {
+
+                if (i + 1 < input.length()) {
+                    current.append(input.charAt(i + 1));
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (ch == '\'') {
+                inSingleQuotes = true;
+                continue;
+            }
+
             if (ch == '"') {
-                inDoubleQuotes = false;
+                inDoubleQuotes = true;
+                continue;
+            }
+
+            if (Character.isWhitespace(ch)) {
+
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+
                 continue;
             }
 
             current.append(ch);
-            continue;
         }
 
-        // Outside quotes: backslash escapes next character
-        if (ch == '\\') {
-
-            if (i + 1 < input.length()) {
-                current.append(input.charAt(i + 1));
-                i++;
-            }
-
-            continue;
+        if (current.length() > 0) {
+            tokens.add(current.toString());
         }
 
-        if (ch == '\'') {
-            inSingleQuotes = true;
-            continue;
-        }
-
-        if (ch == '"') {
-            inDoubleQuotes = true;
-            continue;
-        }
-
-        if (Character.isWhitespace(ch)) {
-
-            if (current.length() > 0) {
-                tokens.add(current.toString());
-                current.setLength(0);
-            }
-
-            continue;
-        }
-
-        current.append(ch);
+        return tokens;
     }
 
-    if (current.length() > 0) {
-        tokens.add(current.toString());
-    }
-
-    return tokens;
-}
     public static void main(String[] args) throws Exception {
 
         Scanner scanner = new Scanner(System.in);
 
-        String currentDirectory =
-                System.getProperty("user.dir");
+        String currentDirectory = System.getProperty("user.dir");
 
         while (true) {
 
@@ -200,8 +199,7 @@ public class Main {
 
                 try {
 
-                    File canonicalDir =
-                            dir.getCanonicalFile();
+                    File canonicalDir = dir.getCanonicalFile();
 
                     if (canonicalDir.exists()
                             && canonicalDir.isDirectory()) {
@@ -213,14 +211,14 @@ public class Main {
 
                         System.out.println(
                                 "cd: " + targetDir
-                                        + ": No such file or directory");
+                                + ": No such file or directory");
                     }
 
                 } catch (IOException e) {
 
                     System.out.println(
                             "cd: " + targetDir
-                                    + ": No such file or directory");
+                            + ": No such file or directory");
                 }
             }
 
@@ -251,7 +249,7 @@ public class Main {
 
                         System.out.println(
                                 cmd + " is "
-                                        + executablePath);
+                                + executablePath);
 
                     } else {
 
@@ -269,12 +267,20 @@ public class Main {
 
                 if (executablePath != null) {
 
+                    List<String> processCommand =
+                            new ArrayList<>();
+
+                    // Use the actual executable path found in PATH
+                    processCommand.add(executablePath);
+
+                    for (int i = 1; i < tokens.size(); i++) {
+                        processCommand.add(tokens.get(i));
+                    }
+
                     ProcessBuilder pb =
-                            new ProcessBuilder(tokens);
+                            new ProcessBuilder(processCommand);
 
-                    pb.directory(
-                            new File(currentDirectory));
-
+                    pb.directory(new File(currentDirectory));
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
