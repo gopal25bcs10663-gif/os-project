@@ -23,13 +23,45 @@ public class Main {
         return null;
     }
 
+    // Parse command line with single quote support
+    private static List<String> parseCommand(String input) {
+        List<String> tokens = new ArrayList<>();
+
+        StringBuilder current = new StringBuilder();
+        boolean inSingleQuotes = false;
+
+        for (int i = 0; i < input.length(); i++) {
+            char ch = input.charAt(i);
+
+            if (ch == '\'') {
+                inSingleQuotes = !inSingleQuotes;
+            } else if (Character.isWhitespace(ch) && !inSingleQuotes) {
+
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+
+            } else {
+                current.append(ch);
+            }
+        }
+
+        if (current.length() > 0) {
+            tokens.add(current.toString());
+        }
+
+        return tokens;
+    }
+
     public static void main(String[] args) throws Exception {
+
         Scanner scanner = new Scanner(System.in);
 
-        // Shell's current working directory
         String currentDirectory = System.getProperty("user.dir");
 
         while (true) {
+
             System.out.print("$ ");
             System.out.flush();
 
@@ -37,65 +69,101 @@ public class Main {
                 break;
             }
 
-            String input = scanner.nextLine().trim();
+            String input = scanner.nextLine();
+
+            if (input.isEmpty()) {
+                continue;
+            }
+
+            List<String> tokens = parseCommand(input);
+
+            if (tokens.isEmpty()) {
+                continue;
+            }
+
+            String command = tokens.get(0);
 
             // exit
-            if (input.equals("exit") || input.equals("exit 0")) {
+            if (command.equals("exit")) {
                 break;
             }
 
             // echo
-            else if (input.startsWith("echo ")) {
-                System.out.println(input.substring(5));
+            else if (command.equals("echo")) {
+
+                for (int i = 1; i < tokens.size(); i++) {
+
+                    if (i > 1) {
+                        System.out.print(" ");
+                    }
+
+                    System.out.print(tokens.get(i));
+                }
+
+                System.out.println();
             }
 
             // pwd
-            else if (input.equals("pwd")) {
+            else if (command.equals("pwd")) {
                 System.out.println(currentDirectory);
             }
 
             // cd
-            else if (input.startsWith("cd ")) {
+            else if (command.equals("cd")) {
 
-                String targetDir = input.substring(3).trim();
+                if (tokens.size() < 2) {
+                    continue;
+                }
+
+                String targetDir = tokens.get(1);
 
                 File dir;
 
-                // cd ~
                 if (targetDir.equals("~")) {
-                    String home = System.getenv("HOME");
-                    dir = new File(home);
-                }
 
-                // Absolute path
-                else if (targetDir.startsWith("/")) {
+                    dir = new File(System.getenv("HOME"));
+
+                } else if (targetDir.startsWith("/")) {
+
                     dir = new File(targetDir);
-                }
 
-                // Relative path
-                else {
+                } else {
+
                     dir = new File(currentDirectory, targetDir);
                 }
 
                 try {
+
                     File canonicalDir = dir.getCanonicalFile();
 
-                    if (canonicalDir.exists() && canonicalDir.isDirectory()) {
+                    if (canonicalDir.exists()
+                            && canonicalDir.isDirectory()) {
+
                         currentDirectory = canonicalDir.getAbsolutePath();
+
                     } else {
+
                         System.out.println(
-                                "cd: " + targetDir + ": No such file or directory");
+                                "cd: " + targetDir
+                                        + ": No such file or directory");
                     }
+
                 } catch (IOException e) {
+
                     System.out.println(
-                            "cd: " + targetDir + ": No such file or directory");
+                            "cd: " + targetDir
+                                    + ": No such file or directory");
                 }
             }
 
             // type
-            else if (input.startsWith("type ")) {
+            else if (command.equals("type")) {
 
-                String cmd = input.substring(5).trim();
+                if (tokens.size() < 2) {
+                    continue;
+                }
+
+                String cmd = tokens.get(1);
 
                 if (cmd.equals("echo")
                         || cmd.equals("exit")
@@ -110,34 +178,33 @@ public class Main {
                     String executablePath = findExecutable(cmd);
 
                     if (executablePath != null) {
-                        System.out.println(cmd + " is " + executablePath);
+                        System.out.println(
+                                cmd + " is " + executablePath);
                     } else {
                         System.out.println(cmd + ": not found");
                     }
                 }
             }
 
-            // External commands
+            // external commands
             else {
-
-                String[] parts = input.split("\\s+");
-                String command = parts[0];
 
                 String executablePath = findExecutable(command);
 
                 if (executablePath != null) {
 
-                    ProcessBuilder pb = new ProcessBuilder(parts);
+                    ProcessBuilder pb =
+                            new ProcessBuilder(tokens);
 
-                    // Execute command from current shell directory
                     pb.directory(new File(currentDirectory));
-
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
 
-                    BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(process.getInputStream()));
+                    BufferedReader reader =
+                            new BufferedReader(
+                                    new InputStreamReader(
+                                            process.getInputStream()));
 
                     String line;
 
@@ -148,7 +215,9 @@ public class Main {
                     process.waitFor();
 
                 } else {
-                    System.out.println(command + ": command not found");
+
+                    System.out.println(
+                            command + ": command not found");
                 }
             }
         }
