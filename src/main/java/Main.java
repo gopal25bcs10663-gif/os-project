@@ -26,7 +26,7 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
 
-        // Current working directory maintained by the shell
+        // Shell's current working directory
         String currentDirectory = System.getProperty("user.dir");
 
         while (true) {
@@ -37,7 +37,7 @@ public class Main {
                 break;
             }
 
-            String input = scanner.nextLine();
+            String input = scanner.nextLine().trim();
 
             // exit
             if (input.equals("exit") || input.equals("exit 0")) {
@@ -56,13 +56,30 @@ public class Main {
 
             // cd
             else if (input.startsWith("cd ")) {
+
                 String targetDir = input.substring(3).trim();
 
-                File dir = new File(targetDir);
+                File dir;
 
-                if (dir.exists() && dir.isDirectory()) {
-                    currentDirectory = dir.getAbsolutePath();
-                } else {
+                // Absolute path
+                if (targetDir.startsWith("/")) {
+                    dir = new File(targetDir);
+                }
+                // Relative path
+                else {
+                    dir = new File(currentDirectory, targetDir);
+                }
+
+                try {
+                    File canonicalDir = dir.getCanonicalFile();
+
+                    if (canonicalDir.exists() && canonicalDir.isDirectory()) {
+                        currentDirectory = canonicalDir.getAbsolutePath();
+                    } else {
+                        System.out.println(
+                                "cd: " + targetDir + ": No such file or directory");
+                    }
+                } catch (IOException e) {
                     System.out.println(
                             "cd: " + targetDir + ": No such file or directory");
                 }
@@ -70,7 +87,8 @@ public class Main {
 
             // type
             else if (input.startsWith("type ")) {
-                String cmd = input.substring(5);
+
+                String cmd = input.substring(5).trim();
 
                 if (cmd.equals("echo")
                         || cmd.equals("exit")
@@ -79,7 +97,9 @@ public class Main {
                         || cmd.equals("cd")) {
 
                     System.out.println(cmd + " is a shell builtin");
+
                 } else {
+
                     String executablePath = findExecutable(cmd);
 
                     if (executablePath != null) {
@@ -90,8 +110,9 @@ public class Main {
                 }
             }
 
-            // external commands
+            // External commands
             else {
+
                 String[] parts = input.split("\\s+");
                 String command = parts[0];
 
@@ -101,7 +122,7 @@ public class Main {
 
                     ProcessBuilder pb = new ProcessBuilder(parts);
 
-                    // Run command from current shell directory
+                    // Run command from current directory
                     pb.directory(new File(currentDirectory));
 
                     pb.redirectErrorStream(true);
