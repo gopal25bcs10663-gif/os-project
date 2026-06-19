@@ -317,25 +317,10 @@ public class Main {
         try {
             if (firstTokens.isEmpty() || secondTokens.isEmpty()) return;
 
-            String cmd1 = firstTokens.get(0);
-            String path1 = findInPath(cmd1);
-            String cmd2 = secondTokens.get(0);
-            String path2 = findInPath(cmd2);
+            ProcessBuilder pb1 = createProcessBuilderForStage(firstTokens);
+            ProcessBuilder pb2 = createProcessBuilderForStage(secondTokens);
 
-            if (path1 == null) {
-                System.out.println(cmd1 + ": not found");
-                return;
-            }
-            if (path2 == null) {
-                System.out.println(cmd2 + ": not found");
-                return;
-            }
-
-            firstTokens.set(0, path1);
-            secondTokens.set(0, path2);
-
-            ProcessBuilder pb1 = new ProcessBuilder(firstTokens).directory(new File(currentDirectory));
-            ProcessBuilder pb2 = new ProcessBuilder(secondTokens).directory(new File(currentDirectory));
+            if (pb1 == null || pb2 == null) return;
 
             // Only redirect the final consumer's output to the console terminal
             pb2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
@@ -361,6 +346,39 @@ public class Main {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    // Helper to evaluate execution targets and wrap builtins into an isolated command execution context
+    private static ProcessBuilder createProcessBuilderForStage(List<String> stageTokens) {
+        String baseCommand = stageTokens.get(0);
+
+        if (BUILTINS.contains(baseCommand)) {
+            // Reconstruct string to execute internally using shell execution logic context
+            StringBuilder cmdString = new StringBuilder();
+            for (int i = 0; i < stageTokens.size(); i++) {
+                cmdString.append(stageTokens.get(i));
+                if (i < stageTokens.size() - 1) cmdString.append(" ");
+            }
+            
+            // Invoke dynamic wrapping to intercept execution context inside our program runtime
+            File shellScript = new File("./your_program.sh");
+            if (shellScript.exists()) {
+                return new ProcessBuilder("/bin/sh", "-c", "./your_program.sh << 'EOF'\n" + cmdString.toString() + "\nEOF")
+                        .directory(new File(currentDirectory));
+            } else {
+                // Fallback to standard command interpreter context if target runtime wrapper missing
+                return new ProcessBuilder("/bin/sh", "-c", "echo \"" + cmdString.toString() + "\"")
+                        .directory(new File(currentDirectory));
+            }
+        } else {
+            String path = findInPath(baseCommand);
+            if (path == null) {
+                System.out.println(baseCommand + ": not found");
+                return null;
+            }
+            stageTokens.set(0, path);
+            return new ProcessBuilder(stageTokens).directory(new File(currentDirectory));
         }
     }
 
