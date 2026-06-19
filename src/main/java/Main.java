@@ -1,3 +1,4 @@
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -10,7 +11,6 @@ import java.util.Scanner;
 public class Main {
     private static String currentDirectory;
     private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
-    private static int jobCounter = 1;
 
     private static class Job {
         int id;
@@ -30,9 +30,7 @@ public class Main {
 
     private static final List<Job> activeJobs = new ArrayList<>();
 
-    // Centralized reaping logic used both before prompts and within the 'jobs' builtin
     private static void reapBackgroundJobs(PrintStream outStream) {
-        // Step 1: Update status for any newly completed processes
         for (Job job : activeJobs) {
             if (job.status.equals("Running") && !job.process.isAlive()) {
                 job.status = "Done";
@@ -42,7 +40,6 @@ public class Main {
             }
         }
 
-        // Step 2: Render output with markers based on current list state
         int size = activeJobs.size();
         for (int i = 0; i < size; i++) {
             Job job = activeJobs.get(i);
@@ -53,17 +50,13 @@ public class Main {
                 marker = '-';
             }
 
-            // If the job is Done, we print it right now before evicting it
-            // If we are calling this from the 'jobs' builtin, we want to print Running jobs too
             String paddedStatus = String.format("%-24s", job.status);
             outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
         }
 
-        // Step 3: Evict reaped "Done" jobs from the tracking table
         activeJobs.removeIf(job -> job.status.equals("Done"));
     }
 
-    // A lightweight check specifically for before the prompt to ONLY print newly completed jobs
     private static void reapBeforePrompt(PrintStream outStream) {
         boolean hasDoneJobs = false;
         for (Job job : activeJobs) {
@@ -87,7 +80,6 @@ public class Main {
                     marker = '-';
                 }
 
-                // Unlike the full 'jobs' builtin, auto-reaping only outputs the "Done" transitions
                 if (job.status.equals("Done")) {
                     String paddedStatus = String.format("%-24s", job.status);
                     outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
@@ -102,7 +94,6 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
-            // Check and print completed background jobs right before rendering the shell prompt
             reapBeforePrompt(System.out);
 
             System.out.print("$ ");
@@ -221,7 +212,6 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Full explicit evaluation print logic
                     reapBackgroundJobs(outStream);
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
@@ -285,11 +275,16 @@ public class Main {
                         Process process = pb.start();
 
                         if (isBackground) {
-                            System.out.println("[" + jobCounter + "] " + process.pid());
+                            // Calculate the assigned job number dynamically
+                            int nextJobId = 1;
+                            if (!activeJobs.isEmpty()) {
+                                nextJobId = activeJobs.get(activeJobs.size() - 1).id + 1;
+                            }
+
+                            System.out.println("[" + nextJobId + "] " + process.pid());
                             System.out.flush();
                             
-                            activeJobs.add(new Job(jobCounter, process.pid(), rawInput.trim(), process));
-                            jobCounter++;
+                            activeJobs.add(new Job(nextJobId, process.pid(), rawInput.trim(), process));
                         } else {
                             process.waitFor();
                         }
