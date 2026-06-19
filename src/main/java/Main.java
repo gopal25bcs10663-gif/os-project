@@ -262,23 +262,11 @@ public class Main {
             // External commands
             else {
 
-                String executablePath =
-                        findExecutable(command);
+                String executablePath = findExecutable(command);
 
                 if (executablePath != null) {
 
-                    List<String> processCommand =
-                            new ArrayList<>();
-
-                    // Use the actual executable path found in PATH
-                    processCommand.add(executablePath);
-
-                    for (int i = 1; i < tokens.size(); i++) {
-                        processCommand.add(tokens.get(i));
-                    }
-
-                    ProcessBuilder pb =
-                            new ProcessBuilder(processCommand);
+                    ProcessBuilder pb = new ProcessBuilder(tokens);
 
                     pb.directory(new File(currentDirectory));
                     pb.redirectErrorStream(true);
@@ -300,8 +288,7 @@ public class Main {
 
                 } else {
 
-                    System.out.println(
-                            command + ": command not found");
+                    System.out.println(command + ": command not found");
                 }
             }
         }
