@@ -1,11 +1,11 @@
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
 public class Main {
     private static String currentDirectory;
@@ -13,70 +13,17 @@ public class Main {
 
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
-        InputStream inputStream = System.in;
+        Scanner scanner = new Scanner(System.in);
 
         while (true) {
             System.out.print("$ ");
             System.out.flush();
 
-            StringBuilder currentLine = new StringBuilder();
-            
-            while (true) {
-                int code;
-                try {
-                    code = inputStream.read();
-                } catch (IOException e) {
-                    break;
-                }
-
-                if (code == -1) {
-                    System.exit(0);
-                }
-
-                char ch = (char) code;
-
-                // Detect the Tab key
-                if (ch == '\t') {
-                    String partial = currentLine.toString();
-                    List<String> matches = new ArrayList<>();
-                    for (String builtin : BUILTINS) {
-                        if (builtin.startsWith(partial)) {
-                            matches.add(builtin);
-                        }
-                    }
-
-                    // Exactly one unique match found
-                    if (matches.size() == 1) {
-                        String matchedBuiltin = matches.get(0);
-                        // Extract what needs to be appended (plus trailing space)
-                        String remainder = matchedBuiltin.substring(partial.length()) + " ";
-                        
-                        System.out.print(remainder);
-                        System.out.flush();
-                        
-                        currentLine.append(remainder);
-                    } else {
-                        // If there are multiple matches or no matches, ring the terminal bell
-                        System.out.print("\u0007");
-                        System.out.flush();
-                    }
-                    continue;
-                }
-
-                // Detect return / line feed execution
-                if (ch == '\n' || ch == '\r') {
-                    System.out.print("\n");
-                    System.out.flush();
-                    break;
-                }
-
-                // Normal character input handling
-                System.out.print(ch);
-                System.out.flush();
-                currentLine.append(ch);
+            if (!scanner.hasNextLine()) {
+                break;
             }
 
-            String input = currentLine.toString().trim();
+            String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 continue;
             }
@@ -111,7 +58,7 @@ public class Main {
                     if (i + 1 < tokens.size()) {
                         stderrFile = tokens.get(i + 1);
                         hasStderrRedirect = true;
-                        isStdoutAppend = false;
+                        isStderrAppend = false;
                         i++;
                     }
                 } else if (tokens.get(i).equals("__STDERR_APPEND__")) {
@@ -173,7 +120,7 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Empty matching logic block for current step
+                    // Stage #AF3 requirement: outputs nothing for now when empty
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
