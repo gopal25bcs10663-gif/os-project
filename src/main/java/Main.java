@@ -24,8 +24,8 @@ public class Main {
     }
 
     private static List<String> parseCommand(String input) {
-        List<String> tokens = new ArrayList<>();
 
+        List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
 
         boolean inSingleQuotes = false;
@@ -35,18 +35,31 @@ public class Main {
 
             char ch = input.charAt(i);
 
+            // Backslash escaping outside quotes
+            if (ch == '\\' && !inSingleQuotes && !inDoubleQuotes) {
+
+                if (i + 1 < input.length()) {
+                    current.append(input.charAt(i + 1));
+                    i++;
+                }
+
+                continue;
+            }
+
             // Single quotes
             if (ch == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
+                continue;
             }
 
             // Double quotes
-            else if (ch == '"' && !inSingleQuotes) {
+            if (ch == '"' && !inSingleQuotes) {
                 inDoubleQuotes = !inDoubleQuotes;
+                continue;
             }
 
-            // Whitespace outside quotes separates arguments
-            else if (Character.isWhitespace(ch)
+            // Argument separator
+            if (Character.isWhitespace(ch)
                     && !inSingleQuotes
                     && !inDoubleQuotes) {
 
@@ -54,12 +67,11 @@ public class Main {
                     tokens.add(current.toString());
                     current.setLength(0);
                 }
+
+                continue;
             }
 
-            // Normal character
-            else {
-                current.append(ch);
-            }
+            current.append(ch);
         }
 
         if (current.length() > 0) {
@@ -73,7 +85,8 @@ public class Main {
 
         Scanner scanner = new Scanner(System.in);
 
-        String currentDirectory = System.getProperty("user.dir");
+        String currentDirectory =
+                System.getProperty("user.dir");
 
         while (true) {
 
@@ -149,7 +162,8 @@ public class Main {
 
                 try {
 
-                    File canonicalDir = dir.getCanonicalFile();
+                    File canonicalDir =
+                            dir.getCanonicalFile();
 
                     if (canonicalDir.exists()
                             && canonicalDir.isDirectory()) {
@@ -160,14 +174,16 @@ public class Main {
                     } else {
 
                         System.out.println(
-                                "cd: " + targetDir
+                                "cd: "
+                                        + targetDir
                                         + ": No such file or directory");
                     }
 
                 } catch (IOException e) {
 
                     System.out.println(
-                            "cd: " + targetDir
+                            "cd: "
+                                    + targetDir
                                     + ": No such file or directory");
                 }
             }
@@ -209,7 +225,7 @@ public class Main {
                 }
             }
 
-            // External commands
+            // external commands
             else {
 
                 String executablePath =
