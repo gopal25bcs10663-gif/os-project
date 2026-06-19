@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
 
@@ -152,39 +151,34 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Update statuses prior to output calculation
+                    // Step 1: Update status for all completed processes
                     for (Job job : activeJobs) {
                         if (job.status.equals("Running") && !job.process.isAlive()) {
                             job.status = "Done";
-                            // Done status outputs omit trailing ampersands
                             if (job.command.endsWith("&")) {
                                 job.command = job.command.substring(0, job.command.length() - 1).trim();
                             }
                         }
                     }
 
+                    // Step 2: Render output with markers based on current list state
                     int size = activeJobs.size();
-                    Iterator<Job> iterator = activeJobs.iterator();
-                    int index = 0;
-
-                    while (iterator.hasNext()) {
-                        Job job = iterator.next();
+                    for (int i = 0; i < size; i++) {
+                        Job job = activeJobs.get(i);
                         char marker = ' ';
-                        if (index == size - 1) {
+                        if (i == size - 1) {
                             marker = '+';
-                        } else if (index == size - 2) {
+                        } else if (i == size - 2) {
                             marker = '-';
                         }
 
                         String paddedStatus = String.format("%-24s", job.status);
                         outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
-
-                        // Safe removal hook for reaped/finished items
-                        if (job.status.equals("Done")) {
-                            iterator.remove();
-                        }
-                        index++;
                     }
+
+                    // Step 3: Evict reaped "Done" jobs from table so they don't reappear
+                    activeJobs.removeIf(job -> job.status.equals("Done"));
+
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
