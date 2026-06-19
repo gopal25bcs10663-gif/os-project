@@ -27,7 +27,7 @@ public class Main {
                 continue;
             }
 
-            // Parse raw input into tokens (handles quotes, escapes, and isolates redirection/append flags)
+            // Parse raw input into tokens (handles quotes, escapes, and isolates redirection flags)
             List<String> tokens = parseCommand(input);
             if (tokens.isEmpty()) {
                 continue;
@@ -40,6 +40,7 @@ public class Main {
             boolean hasStdoutRedirect = false;
             boolean isStdoutAppend = false;
             boolean hasStderrRedirect = false;
+            boolean isStderrAppend = false;
 
             for (int i = 0; i < tokens.size(); i++) {
                 if (tokens.get(i).equals("__STDOUT_REDIRECT__")) {
@@ -60,6 +61,14 @@ public class Main {
                     if (i + 1 < tokens.size()) {
                         stderrFile = tokens.get(i + 1);
                         hasStderrRedirect = true;
+                        isStderrAppend = false;
+                        i++; // Skip the filename token
+                    }
+                } else if (tokens.get(i).equals("__STDERR_APPEND__")) {
+                    if (i + 1 < tokens.size()) {
+                        stderrFile = tokens.get(i + 1);
+                        hasStderrRedirect = true;
+                        isStderrAppend = true;
                         i++; // Skip the filename token
                     }
                 } else {
@@ -88,7 +97,6 @@ public class Main {
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs();
                     }
-                    // Pass isStdoutAppend flag: true = append, false = overwrite
                     outStream = new PrintStream(new FileOutputStream(stdoutFileObj, isStdoutAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
@@ -96,7 +104,7 @@ public class Main {
                 }
             }
 
-            // Setup stderr redirection if present
+            // Setup stderr redirection/append if present
             if (hasStderrRedirect && stderrFile != null) {
                 stderrFileObj = new File(stderrFile);
                 if (!stderrFileObj.isAbsolute()) {
@@ -107,7 +115,8 @@ public class Main {
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs();
                     }
-                    errStream = new PrintStream(new FileOutputStream(stderrFileObj, false));
+                    // Pass isStderrAppend flag: true = append, false = overwrite
+                    errStream = new PrintStream(new FileOutputStream(stderrFileObj, isStderrAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
                     continue;
@@ -189,9 +198,13 @@ public class Main {
                             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                         }
                         
-                        // Handle standard error stream assignment
+                        // Handle standard error stream redirection/appending
                         if (hasStderrRedirect) {
-                            pb.redirectError(stderrFileObj);
+                            if (isStderrAppend) {
+                                pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
+                            } else {
+                                pb.redirectError(stderrFileObj);
+                            }
                         } else {
                             pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                         }
@@ -203,7 +216,7 @@ public class Main {
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                // Safely close file streams to unlock files and push buffered data onto the disk
+                // Safely close file streams to unlock files and flush outputs to disk
                 if (hasStdoutRedirect && outStream != System.out && outStream != null) {
                     outStream.close();
                 }
@@ -269,21 +282,28 @@ public class Main {
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i += 2; // Step over '>>'
+                    i += 2; // Step over '1>>'
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_REDIRECT__");
-                    i++; // Step over '>'
+                    i++; // Step over '1>'
+                } else if (c == '2' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("__STDERR_APPEND__");
+                    i += 2; // Step over '2>>'
                 } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_REDIRECT__");
-                    i++; // Step over '>'
+                    i++; // Step over '2>'
                 } else if (c == '>' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
