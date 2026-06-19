@@ -27,7 +27,7 @@ public class Main {
                 continue;
             }
 
-            // Parse raw input into tokens (handles quotes, escapes, and isolates redirection flags)
+            // Parse raw input into tokens (handles quotes, escapes, and isolates redirection/append flags)
             List<String> tokens = parseCommand(input);
             if (tokens.isEmpty()) {
                 continue;
@@ -38,6 +38,7 @@ public class Main {
             String stdoutFile = null;
             String stderrFile = null;
             boolean hasStdoutRedirect = false;
+            boolean isStdoutAppend = false;
             boolean hasStderrRedirect = false;
 
             for (int i = 0; i < tokens.size(); i++) {
@@ -45,6 +46,14 @@ public class Main {
                     if (i + 1 < tokens.size()) {
                         stdoutFile = tokens.get(i + 1);
                         hasStdoutRedirect = true;
+                        isStdoutAppend = false;
+                        i++; // Skip the filename token
+                    }
+                } else if (tokens.get(i).equals("__STDOUT_APPEND__")) {
+                    if (i + 1 < tokens.size()) {
+                        stdoutFile = tokens.get(i + 1);
+                        hasStdoutRedirect = true;
+                        isStdoutAppend = true;
                         i++; // Skip the filename token
                     }
                 } else if (tokens.get(i).equals("__STDERR_REDIRECT__")) {
@@ -68,7 +77,7 @@ public class Main {
             File stdoutFileObj = null;
             File stderrFileObj = null;
 
-            // Setup stdout redirection if present
+            // Setup stdout redirection/append if present
             if (hasStdoutRedirect && stdoutFile != null) {
                 stdoutFileObj = new File(stdoutFile);
                 if (!stdoutFileObj.isAbsolute()) {
@@ -79,7 +88,8 @@ public class Main {
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs();
                     }
-                    outStream = new PrintStream(new FileOutputStream(stdoutFileObj, false));
+                    // Pass isStdoutAppend flag: true = append, false = overwrite
+                    outStream = new PrintStream(new FileOutputStream(stdoutFileObj, isStdoutAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
                     continue;
@@ -165,13 +175,16 @@ public class Main {
                     if (execPath == null) {
                         outStream.println(command + ": not found");
                     } else {
-                        // Keep original token list intact so argv[0] remains the clean command name
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
                         
-                        // Handle standard output stream assignment
+                        // Handle standard output stream redirection/appending
                         if (hasStdoutRedirect) {
-                            pb.redirectOutput(stdoutFileObj);
+                            if (isStdoutAppend) {
+                                pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
+                            } else {
+                                pb.redirectOutput(stdoutFileObj);
+                            }
                         } else {
                             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                         }
@@ -190,7 +203,7 @@ public class Main {
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                // Safely close and flush file streams to avoid file locks or truncated data
+                // Safely close file streams to unlock files and push buffered data onto the disk
                 if (hasStdoutRedirect && outStream != System.out && outStream != null) {
                     outStream.close();
                 }
@@ -235,7 +248,7 @@ public class Main {
                     currentToken.append(c);
                 }
             } else {
-                // Outside any quote context
+                // Outside any quote context - order matters when looking for multi-character tokens
                 if (c == '\\') {
                     if (i + 1 < input.length()) {
                         currentToken.append(input.charAt(i + 1));
@@ -250,20 +263,34 @@ public class Main {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
+                } else if (c == '1' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("__STDOUT_APPEND__");
+                    i += 2; // Step over '>>'
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_REDIRECT__");
-                    i++; // Step over the '>' character
+                    i++; // Step over '>'
                 } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_REDIRECT__");
-                    i++; // Step over the '>' character
+                    i++; // Step over '>'
+                } else if (c == '>' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("__STDOUT_APPEND__");
+                    i++; // Step over second '>'
                 } else if (c == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
@@ -282,7 +309,6 @@ public class Main {
     }
 
     private static String findInPath(String command) {
-        // Keeps the fix for Linux paths containing literal backslashes
         if (command.contains("/")) {
             File f = new File(command);
             if (f.exists() && f.isFile() && f.canExecute()) {
