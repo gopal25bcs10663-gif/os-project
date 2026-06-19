@@ -26,11 +26,14 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
 
-        while (scanner.hasNextLine()) {
+        while (true) {
             System.out.print("$ ");
+            System.out.flush();
+
             if (!scanner.hasNextLine()) {
                 break;
             }
+
             String input = scanner.nextLine();
 
             if (input.equals("exit") || input.equals("exit 0")) {
@@ -44,9 +47,9 @@ public class Main {
             else if (input.startsWith("type ")) {
                 String cmd = input.substring(5);
 
-                if (cmd.equals("echo") ||
-                    cmd.equals("exit") ||
-                    cmd.equals("type")) {
+                if (cmd.equals("echo")
+                        || cmd.equals("exit")
+                        || cmd.equals("type")) {
 
                     System.out.println(cmd + " is a shell builtin");
                 } else {
@@ -68,14 +71,14 @@ public class Main {
 
                 if (executablePath != null) {
 
-                    List<String> cmd = new ArrayList<>();
-                    cmd.add(executablePath);
+                    List<String> commandWithArgs = new ArrayList<>();
+                    commandWithArgs.add(executablePath);
 
                     for (int i = 1; i < parts.length; i++) {
-                        cmd.add(parts[i]);
+                        commandWithArgs.add(parts[i]);
                     }
 
-                    ProcessBuilder pb = new ProcessBuilder(cmd);
+                    ProcessBuilder pb = new ProcessBuilder(commandWithArgs);
                     pb.redirectErrorStream(true);
 
                     Process process = pb.start();
