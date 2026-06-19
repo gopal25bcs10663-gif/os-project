@@ -25,62 +25,103 @@ public class Main {
 
     private static List<String> parseCommand(String input) {
 
-        List<String> tokens = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
+    List<String> tokens = new ArrayList<>();
+    StringBuilder current = new StringBuilder();
 
-        boolean inSingleQuotes = false;
-        boolean inDoubleQuotes = false;
+    boolean inSingleQuotes = false;
+    boolean inDoubleQuotes = false;
 
-        for (int i = 0; i < input.length(); i++) {
+    for (int i = 0; i < input.length(); i++) {
 
-            char ch = input.charAt(i);
+        char ch = input.charAt(i);
 
-            // Backslash escaping ONLY outside quotes
-            if (ch == '\\' && !inSingleQuotes && !inDoubleQuotes) {
+        // Inside single quotes: everything is literal
+        if (inSingleQuotes) {
+
+            if (ch == '\'') {
+                inSingleQuotes = false;
+            } else {
+                current.append(ch);
+            }
+
+            continue;
+        }
+
+        // Inside double quotes
+        if (inDoubleQuotes) {
+
+            if (ch == '\\') {
 
                 if (i + 1 < input.length()) {
-                    current.append(input.charAt(i + 1));
-                    i++;
+
+                    char next = input.charAt(i + 1);
+
+                    // Only \" and \\ are special in this stage
+                    if (next == '"' || next == '\\') {
+                        current.append(next);
+                        i++;
+                    } else {
+                        current.append('\\');
+                        current.append(next);
+                        i++;
+                    }
+
+                } else {
+                    current.append('\\');
                 }
 
                 continue;
             }
 
-            // Single quotes
-            if (ch == '\'' && !inDoubleQuotes) {
-                inSingleQuotes = !inSingleQuotes;
-                continue;
-            }
-
-            // Double quotes
-            if (ch == '"' && !inSingleQuotes) {
-                inDoubleQuotes = !inDoubleQuotes;
-                continue;
-            }
-
-            // Whitespace separates arguments only outside quotes
-            if (Character.isWhitespace(ch)
-                    && !inSingleQuotes
-                    && !inDoubleQuotes) {
-
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
-
+            if (ch == '"') {
+                inDoubleQuotes = false;
                 continue;
             }
 
             current.append(ch);
+            continue;
         }
 
-        if (current.length() > 0) {
-            tokens.add(current.toString());
+        // Outside quotes: backslash escapes next character
+        if (ch == '\\') {
+
+            if (i + 1 < input.length()) {
+                current.append(input.charAt(i + 1));
+                i++;
+            }
+
+            continue;
         }
 
-        return tokens;
+        if (ch == '\'') {
+            inSingleQuotes = true;
+            continue;
+        }
+
+        if (ch == '"') {
+            inDoubleQuotes = true;
+            continue;
+        }
+
+        if (Character.isWhitespace(ch)) {
+
+            if (current.length() > 0) {
+                tokens.add(current.toString());
+                current.setLength(0);
+            }
+
+            continue;
+        }
+
+        current.append(ch);
     }
 
+    if (current.length() > 0) {
+        tokens.add(current.toString());
+    }
+
+    return tokens;
+}
     public static void main(String[] args) throws Exception {
 
         Scanner scanner = new Scanner(System.in);
