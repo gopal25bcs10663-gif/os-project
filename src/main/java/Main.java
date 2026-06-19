@@ -240,7 +240,9 @@ public class Main {
     }
 
     private static String findInPath(String command) {
-        if (command.contains("/") || command.contains("\\")) {
+        // Codecrafters environments run on Linux, where '/' is the sole directory separator.
+        // Checking for '\\' here incorrectly marks commands containing literal backslashes as local files.
+        if (command.contains("/")) {
             File f = new File(command);
             if (f.exists() && f.isFile() && f.canExecute()) {
                 return f.getAbsolutePath();
