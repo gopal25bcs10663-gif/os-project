@@ -30,11 +30,81 @@ public class Main {
 
     private static final List<Job> activeJobs = new ArrayList<>();
 
+    // Centralized reaping logic used both before prompts and within the 'jobs' builtin
+    private static void reapBackgroundJobs(PrintStream outStream) {
+        // Step 1: Update status for any newly completed processes
+        for (Job job : activeJobs) {
+            if (job.status.equals("Running") && !job.process.isAlive()) {
+                job.status = "Done";
+                if (job.command.endsWith("&")) {
+                    job.command = job.command.substring(0, job.command.length() - 1).trim();
+                }
+            }
+        }
+
+        // Step 2: Render output with markers based on current list state
+        int size = activeJobs.size();
+        for (int i = 0; i < size; i++) {
+            Job job = activeJobs.get(i);
+            char marker = ' ';
+            if (i == size - 1) {
+                marker = '+';
+            } else if (i == size - 2) {
+                marker = '-';
+            }
+
+            // If the job is Done, we print it right now before evicting it
+            // If we are calling this from the 'jobs' builtin, we want to print Running jobs too
+            String paddedStatus = String.format("%-24s", job.status);
+            outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
+        }
+
+        // Step 3: Evict reaped "Done" jobs from the tracking table
+        activeJobs.removeIf(job -> job.status.equals("Done"));
+    }
+
+    // A lightweight check specifically for before the prompt to ONLY print newly completed jobs
+    private static void reapBeforePrompt(PrintStream outStream) {
+        boolean hasDoneJobs = false;
+        for (Job job : activeJobs) {
+            if (job.status.equals("Running") && !job.process.isAlive()) {
+                job.status = "Done";
+                if (job.command.endsWith("&")) {
+                    job.command = job.command.substring(0, job.command.length() - 1).trim();
+                }
+                hasDoneJobs = true;
+            }
+        }
+
+        if (hasDoneJobs) {
+            int size = activeJobs.size();
+            for (int i = 0; i < size; i++) {
+                Job job = activeJobs.get(i);
+                char marker = ' ';
+                if (i == size - 1) {
+                    marker = '+';
+                } else if (i == size - 2) {
+                    marker = '-';
+                }
+
+                // Unlike the full 'jobs' builtin, auto-reaping only outputs the "Done" transitions
+                if (job.status.equals("Done")) {
+                    String paddedStatus = String.format("%-24s", job.status);
+                    outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
+                }
+            }
+            activeJobs.removeIf(job -> job.status.equals("Done"));
+        }
+    }
+
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
+            // Check and print completed background jobs right before rendering the shell prompt
+            reapBeforePrompt(System.out);
+
             System.out.print("$ ");
             System.out.flush();
 
@@ -151,34 +221,8 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Step 1: Update status for all completed processes
-                    for (Job job : activeJobs) {
-                        if (job.status.equals("Running") && !job.process.isAlive()) {
-                            job.status = "Done";
-                            if (job.command.endsWith("&")) {
-                                job.command = job.command.substring(0, job.command.length() - 1).trim();
-                            }
-                        }
-                    }
-
-                    // Step 2: Render output with markers based on current list state
-                    int size = activeJobs.size();
-                    for (int i = 0; i < size; i++) {
-                        Job job = activeJobs.get(i);
-                        char marker = ' ';
-                        if (i == size - 1) {
-                            marker = '+';
-                        } else if (i == size - 2) {
-                            marker = '-';
-                        }
-
-                        String paddedStatus = String.format("%-24s", job.status);
-                        outStream.println("[" + job.id + "]" + marker + "  " + paddedStatus + job.command);
-                    }
-
-                    // Step 3: Evict reaped "Done" jobs from table so they don't reappear
-                    activeJobs.removeIf(job -> job.status.equals("Done"));
-
+                    // Full explicit evaluation print logic
+                    reapBackgroundJobs(outStream);
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
