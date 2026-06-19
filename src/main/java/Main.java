@@ -46,6 +46,11 @@ public class Main {
                 System.out.println(input.substring(5));
             }
 
+            // pwd
+            else if (input.equals("pwd")) {
+                System.out.println(System.getProperty("user.dir"));
+            }
+
             // type
             else if (input.startsWith("type ")) {
                 String cmd = input.substring(5);
@@ -56,8 +61,6 @@ public class Main {
                         || cmd.equals("pwd")) {
 
                     System.out.println(cmd + " is a shell builtin");
-                } else if (input.equals("pwd")) {
-                    System.out.println(System.getProperty("user.dir"));
                 } else {
                     String executablePath = findExecutable(cmd);
 
