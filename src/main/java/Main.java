@@ -35,15 +35,23 @@ public class Main {
 
             // Extract redirection metadata from the command arguments
             List<String> cmdArgs = new ArrayList<>();
-            String outputFile = null;
-            boolean hasRedirect = false;
+            String stdoutFile = null;
+            String stderrFile = null;
+            boolean hasStdoutRedirect = false;
+            boolean hasStderrRedirect = false;
 
             for (int i = 0; i < tokens.size(); i++) {
                 if (tokens.get(i).equals("__STDOUT_REDIRECT__")) {
                     if (i + 1 < tokens.size()) {
-                        outputFile = tokens.get(i + 1);
-                        hasRedirect = true;
-                        i++; // Skip the filename token since it's consumed here
+                        stdoutFile = tokens.get(i + 1);
+                        hasStdoutRedirect = true;
+                        i++; // Skip the filename token
+                    }
+                } else if (tokens.get(i).equals("__STDERR_REDIRECT__")) {
+                    if (i + 1 < tokens.size()) {
+                        stderrFile = tokens.get(i + 1);
+                        hasStderrRedirect = true;
+                        i++; // Skip the filename token
                     }
                 } else {
                     cmdArgs.add(tokens.get(i));
@@ -54,24 +62,42 @@ public class Main {
                 continue;
             }
 
-            // Configure the output destination stream
+            // Configure the output destination streams
             PrintStream outStream = System.out;
-            File redirectFileObj = null;
+            PrintStream errStream = System.err;
+            File stdoutFileObj = null;
+            File stderrFileObj = null;
 
-            if (hasRedirect && outputFile != null) {
-                redirectFileObj = new File(outputFile);
-                // Ensure relative paths match our internally tracked currentDirectory
-                if (!redirectFileObj.isAbsolute()) {
-                    redirectFileObj = new File(currentDirectory, outputFile);
+            // Setup stdout redirection if present
+            if (hasStdoutRedirect && stdoutFile != null) {
+                stdoutFileObj = new File(stdoutFile);
+                if (!stdoutFileObj.isAbsolute()) {
+                    stdoutFileObj = new File(currentDirectory, stdoutFile);
                 }
                 try {
-                    // Automatically generate parent directories if they don't exist yet
-                    File parent = redirectFileObj.getParentFile();
+                    File parent = stdoutFileObj.getParentFile();
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs();
                     }
-                    // 'false' flag ensures the file is overwritten if it already exists
-                    outStream = new PrintStream(new FileOutputStream(redirectFileObj, false));
+                    outStream = new PrintStream(new FileOutputStream(stdoutFileObj, false));
+                } catch (IOException e) {
+                    System.err.println("Shell redirection error: " + e.getMessage());
+                    continue;
+                }
+            }
+
+            // Setup stderr redirection if present
+            if (hasStderrRedirect && stderrFile != null) {
+                stderrFileObj = new File(stderrFile);
+                if (!stderrFileObj.isAbsolute()) {
+                    stderrFileObj = new File(currentDirectory, stderrFile);
+                }
+                try {
+                    File parent = stderrFileObj.getParentFile();
+                    if (parent != null && !parent.exists()) {
+                        parent.mkdirs();
+                    }
+                    errStream = new PrintStream(new FileOutputStream(stderrFileObj, false));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
                     continue;
@@ -115,7 +141,7 @@ public class Main {
                             if (targetDir.exists() && targetDir.isDirectory()) {
                                 currentDirectory = targetDir.getCanonicalPath();
                             } else {
-                                System.err.println("cd: " + path + ": No such file or directory");
+                                errStream.println("cd: " + path + ": No such file or directory");
                             }
                         }
                     }
@@ -137,19 +163,25 @@ public class Main {
                     // External Executable Command Processing
                     String execPath = findInPath(command);
                     if (execPath == null) {
-                        System.out.println(command + ": not found");
+                        outStream.println(command + ": not found");
                     } else {
                         // Keep original token list intact so argv[0] remains the clean command name
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
                         
-                        if (hasRedirect) {
-                            pb.redirectOutput(redirectFileObj);
+                        // Handle standard output stream assignment
+                        if (hasStdoutRedirect) {
+                            pb.redirectOutput(stdoutFileObj);
                         } else {
                             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                         }
-                        // Keep standard error bound to the terminal
-                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                        
+                        // Handle standard error stream assignment
+                        if (hasStderrRedirect) {
+                            pb.redirectError(stderrFileObj);
+                        } else {
+                            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                        }
                         
                         Process process = pb.start();
                         process.waitFor();
@@ -158,9 +190,12 @@ public class Main {
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                // Safely close and flush file streams to avoid empty/corrupted file locks
-                if (hasRedirect && outStream != System.out && outStream != null) {
+                // Safely close and flush file streams to avoid file locks or truncated data
+                if (hasStdoutRedirect && outStream != System.out && outStream != null) {
                     outStream.close();
+                }
+                if (hasStderrRedirect && errStream != System.err && errStream != null) {
+                    errStream.close();
                 }
             }
         }
@@ -215,12 +250,6 @@ public class Main {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
-                } else if (c == '>') {
-                    if (currentToken.length() > 0) {
-                        tokens.add(currentToken.toString());
-                        currentToken.setLength(0);
-                    }
-                    tokens.add("__STDOUT_REDIRECT__");
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
@@ -228,6 +257,19 @@ public class Main {
                     }
                     tokens.add("__STDOUT_REDIRECT__");
                     i++; // Step over the '>' character
+                } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("__STDERR_REDIRECT__");
+                    i++; // Step over the '>' character
+                } else if (c == '>') {
+                    if (currentToken.length() > 0) {
+                        tokens.add(currentToken.toString());
+                        currentToken.setLength(0);
+                    }
+                    tokens.add("__STDOUT_REDIRECT__");
                 } else {
                     currentToken.append(c);
                 }
@@ -240,8 +282,7 @@ public class Main {
     }
 
     private static String findInPath(String command) {
-        // Codecrafters environments run on Linux, where '/' is the sole directory separator.
-        // Checking for '\\' here incorrectly marks commands containing literal backslashes as local files.
+        // Keeps the fix for Linux paths containing literal backslashes
         if (command.contains("/")) {
             File f = new File(command);
             if (f.exists() && f.isFile() && f.canExecute()) {
