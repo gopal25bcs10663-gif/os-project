@@ -16,7 +16,7 @@ public class Main {
         long pid;
         String command;
         String status;
-        List<Process> processes; // Track list of processes for pipeline structures
+        List<Process> processes;
 
         Job(int id, long pid, String command, List<Process> processes) {
             this.id = id;
@@ -26,7 +26,6 @@ public class Main {
             this.processes = processes;
         }
 
-        // A pipeline job is alive if any of its individual processes are still active
         boolean isAlive() {
             for (Process p : processes) {
                 if (p.isAlive()) return true;
@@ -130,10 +129,8 @@ public class Main {
                 tokens.remove(tokens.size() - 1);
             }
 
-            // Detect Pipeline splitting point
             int pipeIndex = tokens.indexOf("|");
             if (pipeIndex != -1) {
-                // Pipeline branch
                 List<String> firstCmdTokens = tokens.subList(0, pipeIndex);
                 List<String> secondCmdTokens = tokens.subList(pipeIndex + 1, tokens.size());
 
@@ -141,7 +138,6 @@ public class Main {
                 continue;
             }
 
-            // Normal Execution flow (Single Command)
             List<String> cmdArgs = new ArrayList<>();
             String stdoutFile = null;
             String stderrFile = null;
@@ -335,14 +331,16 @@ public class Main {
                 return;
             }
 
-            // Absolute paths setup
             firstTokens.set(0, path1);
             secondTokens.set(0, path2);
 
             ProcessBuilder pb1 = new ProcessBuilder(firstTokens).directory(new File(currentDirectory));
             ProcessBuilder pb2 = new ProcessBuilder(secondTokens).directory(new File(currentDirectory));
 
-            // Use ProcessBuilder native startPipeline capability
+            // Inherit environment input/output loops cleanly so data targets terminal streams
+            pb1.inheritIO();
+            pb2.inheritIO();
+
             List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(pb1, pb2));
 
             if (isBackground) {
@@ -351,14 +349,12 @@ public class Main {
                     nextJobId = activeJobs.get(activeJobs.size() - 1).id + 1;
                 }
                 
-                // Track standard PID mapping to the final consumer of the pipeline
                 long rootPid = pipeline.get(pipeline.size() - 1).pid();
                 System.out.println("[" + nextJobId + "] " + rootPid);
                 System.out.flush();
 
                 activeJobs.add(new Job(nextJobId, rootPid, originalCommand, pipeline));
             } else {
-                // Foreground pipeline blocks until the last consumer process finishes execution
                 for (Process p : pipeline) {
                     p.waitFor();
                 }
