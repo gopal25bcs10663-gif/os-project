@@ -31,7 +31,7 @@ public class Main {
 
             String input = scanner.nextLine();
 
-            if (input.equals("exit 0")) {
+            if (input.equals("exit") || input.equals("exit 0")) {
                 break;
             }
 
@@ -63,6 +63,5 @@ public class Main {
             }
         }
 
-        scanner.close();
     }
 }
