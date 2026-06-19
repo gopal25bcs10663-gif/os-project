@@ -262,7 +262,7 @@ public class Main {
                     currentToken.append(c);
                 }
             } else {
-                // Outside any quote context - order matters when looking for multi-character tokens
+                // Outside any quote context
                 if (c == '\\') {
                     if (i + 1 < input.length()) {
                         currentToken.append(input.charAt(i + 1));
@@ -277,43 +277,41 @@ public class Main {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
-                } else if (c == '1' && i + 2 < input.length() && input.charAt(i + 1) == ' Pand ' && input.charAt(i + 2) == '>') { // matching '1>>' safely
-                    // Handled inside direct char matching below
                 } else if (c == '1' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i += 2;
+                    i += 2; // Step over '1>>'
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_REDIRECT__");
-                    i++;
+                    i++; // Step over '1>'
                 } else if (c == '2' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_APPEND__");
-                    i += 2;
+                    i += 2; // Step over '2>>'
                 } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_REDIRECT__");
-                    i++;
+                    i++; // Step over '2>'
                 } else if (c == '>' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i++;
+                    i++; // Step over second '>'
                 } else if (c == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
