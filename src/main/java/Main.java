@@ -259,7 +259,7 @@ public class Main {
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-            } finaly {
+            } finally {
                 if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
                 if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
             }
