@@ -61,10 +61,17 @@ public class Main {
 
                 File dir;
 
+                // cd ~
+                if (targetDir.equals("~")) {
+                    String home = System.getenv("HOME");
+                    dir = new File(home);
+                }
+
                 // Absolute path
-                if (targetDir.startsWith("/")) {
+                else if (targetDir.startsWith("/")) {
                     dir = new File(targetDir);
                 }
+
                 // Relative path
                 else {
                     dir = new File(currentDirectory, targetDir);
@@ -122,7 +129,7 @@ public class Main {
 
                     ProcessBuilder pb = new ProcessBuilder(parts);
 
-                    // Run command from current directory
+                    // Execute command from current shell directory
                     pb.directory(new File(currentDirectory));
 
                     pb.redirectErrorStream(true);
