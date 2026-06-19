@@ -10,7 +10,7 @@ import java.util.Scanner;
 public class Main {
     private static String currentDirectory;
     private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
-    private static int jobCounter = 1; // Tracks job numbers like [1], [2], etc.
+    private static int jobCounter = 1;
 
     public static void main(String[] args) {
         currentDirectory = System.getProperty("user.dir");
@@ -38,7 +38,6 @@ public class Main {
             List<String> tokens = parseCommand(input);
             if (tokens.isEmpty()) continue;
 
-            // If the parsing left a trailing '&' token, clean it up
             if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
                 isBackground = true;
                 tokens.remove(tokens.size() - 1);
@@ -133,7 +132,7 @@ public class Main {
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Empty list output context placeholder
+                    // Placeholder logic block
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
@@ -175,30 +174,33 @@ public class Main {
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
                         
-                        if (hasStdoutRedirect) {
-                            if (isStdoutAppend) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
-                            else pb.redirectOutput(stdoutFileObj);
+                        // If no redirect flags were explicitly passed, inherit terminal standard streams directly
+                        if (!hasStdoutRedirect && !hasStderrRedirect) {
+                            pb.inheritIO();
                         } else {
-                            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                        }
-                        
-                        if (hasStderrRedirect) {
-                            if (isStderrAppend) pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
-                            else pb.redirectError(stderrFileObj);
-                        } else {
-                            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                            // Specific file descriptor redirections fallback
+                            if (hasStdoutRedirect) {
+                                if (isStdoutAppend) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
+                                else pb.redirectOutput(stdoutFileObj);
+                            } else {
+                                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                            }
+
+                            if (hasStderrRedirect) {
+                                if (isStderrAppend) pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
+                                else pb.redirectError(stderrFileObj);
+                            } else {
+                                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                            }
                         }
 
                         Process process = pb.start();
 
                         if (isBackground) {
-                            // Print background tracking identifier immediately
                             System.out.println("[" + jobCounter + "] " + process.pid());
                             System.out.flush();
                             jobCounter++;
-                            // Do NOT call process.waitFor() so the shell prompt returns immediately
                         } else {
-                            // Foreground jobs block the loop until execution wraps up
                             process.waitFor();
                         }
                     }
