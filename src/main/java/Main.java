@@ -1,6 +1,8 @@
+import java.io.File;
 import java.util.Scanner;
 
 public class Main {
+
     private static String findExecutable(String command) {
         String pathEnv = System.getenv("PATH");
 
@@ -20,13 +22,15 @@ public class Main {
 
         return null;
     }
-    public static void main(String[] args) throws Exception {
 
+    public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
             System.out.print("$ ");
+
             String input = scanner.nextLine();
+
             if (input.equals("exit 0")) {
                 break;
             }
@@ -58,5 +62,7 @@ public class Main {
                 System.out.println(input + ": command not found");
             }
         }
+
+        scanner.close();
     }
 }
