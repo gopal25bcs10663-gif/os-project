@@ -1,39 +1,91 @@
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Scanner;
 
 public class Main {
     private static String currentDirectory;
+    private static final List<String> BUILTINS = Arrays.asList("echo", "exit", "pwd", "cd", "type", "jobs");
 
     public static void main(String[] args) {
-        // Initialize the current working directory tracking
         currentDirectory = System.getProperty("user.dir");
-        Scanner scanner = new Scanner(System.in);
+        InputStream inputStream = System.in;
 
         while (true) {
             System.out.print("$ ");
             System.out.flush();
 
-            if (!scanner.hasNextLine()) {
-                break;
+            StringBuilder currentLine = new StringBuilder();
+            
+            while (true) {
+                int code;
+                try {
+                    code = inputStream.read();
+                } catch (IOException e) {
+                    break;
+                }
+
+                if (code == -1) {
+                    System.exit(0);
+                }
+
+                char ch = (char) code;
+
+                // Handle Tab Key
+                if (ch == '\t') {
+                    String partial = currentLine.toString().trim();
+                    List<String> matches = new ArrayList<>();
+                    for (String builtin : BUILTINS) {
+                        if (builtin.startsWith(partial)) {
+                            matches.add(builtin);
+                        }
+                    }
+
+                    // If there is exactly one matching builtin, autocomplete it!
+                    if (matches.size() == 1) {
+                        String matchedBuiltin = matches.get(0);
+                        // Determine what's missing to finish the word
+                        String dynamicAddition = matchedBuiltin.substring(partial.length()) + " ";
+                        
+                        // Print the missing piece back out to the terminal line
+                        System.out.print(dynamicAddition);
+                        System.out.flush();
+                        
+                        // Append it to our tracking string buffer
+                        currentLine.append(dynamicAddition);
+                    } else {
+                        // Optional: System.out.print("\u0007"); // Bell sound if multiple or no matches
+                        // For this stage, we just don't mutate if it's ambiguous
+                    }
+                    continue;
+                }
+
+                // Handle Enter Key (End of Command)
+                if (ch == '\n' || ch == '\r') {
+                    System.out.print(ch);
+                    System.out.flush();
+                    break;
+                }
+
+                // Normal Character Echoing
+                System.out.print(ch);
+                System.out.flush();
+                currentLine.append(ch);
             }
 
-            String input = scanner.nextLine().trim();
+            String input = currentLine.toString().trim();
             if (input.isEmpty()) {
                 continue;
             }
 
-            // Parse raw input into tokens (handles quotes, escapes, and isolates redirection flags)
+            // --- The rest of your command parsing and execution logic ---
             List<String> tokens = parseCommand(input);
-            if (tokens.isEmpty()) {
-                continue;
-            }
+            if (tokens.isEmpty()) continue;
 
-            // Extract redirection metadata from the command arguments
             List<String> cmdArgs = new ArrayList<>();
             String stdoutFile = null;
             String stderrFile = null;
@@ -48,55 +100,47 @@ public class Main {
                         stdoutFile = tokens.get(i + 1);
                         hasStdoutRedirect = true;
                         isStdoutAppend = false;
-                        i++; // Skip the filename token
+                        i++;
                     }
                 } else if (tokens.get(i).equals("__STDOUT_APPEND__")) {
                     if (i + 1 < tokens.size()) {
                         stdoutFile = tokens.get(i + 1);
                         hasStdoutRedirect = true;
                         isStdoutAppend = true;
-                        i++; // Skip the filename token
+                        i++;
                     }
                 } else if (tokens.get(i).equals("__STDERR_REDIRECT__")) {
                     if (i + 1 < tokens.size()) {
                         stderrFile = tokens.get(i + 1);
                         hasStderrRedirect = true;
                         isStderrAppend = false;
-                        i++; // Skip the filename token
+                        i++;
                     }
                 } else if (tokens.get(i).equals("__STDERR_APPEND__")) {
                     if (i + 1 < tokens.size()) {
                         stderrFile = tokens.get(i + 1);
                         hasStderrRedirect = true;
                         isStderrAppend = true;
-                        i++; // Skip the filename token
+                        i++;
                     }
                 } else {
                     cmdArgs.add(tokens.get(i));
                 }
             }
 
-            if (cmdArgs.isEmpty()) {
-                continue;
-            }
+            if (cmdArgs.isEmpty()) continue;
 
-            // Configure the output destination streams
             PrintStream outStream = System.out;
             PrintStream errStream = System.err;
             File stdoutFileObj = null;
             File stderrFileObj = null;
 
-            // Setup stdout redirection/append if present
             if (hasStdoutRedirect && stdoutFile != null) {
                 stdoutFileObj = new File(stdoutFile);
-                if (!stdoutFileObj.isAbsolute()) {
-                    stdoutFileObj = new File(currentDirectory, stdoutFile);
-                }
+                if (!stdoutFileObj.isAbsolute()) stdoutFileObj = new File(currentDirectory, stdoutFile);
                 try {
                     File parent = stdoutFileObj.getParentFile();
-                    if (parent != null && !parent.exists()) {
-                        parent.mkdirs();
-                    }
+                    if (parent != null && !parent.exists()) parent.mkdirs();
                     outStream = new PrintStream(new FileOutputStream(stdoutFileObj, isStdoutAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
@@ -104,17 +148,12 @@ public class Main {
                 }
             }
 
-            // Setup stderr redirection/append if present
             if (hasStderrRedirect && stderrFile != null) {
                 stderrFileObj = new File(stderrFile);
-                if (!stderrFileObj.isAbsolute()) {
-                    stderrFileObj = new File(currentDirectory, stderrFile);
-                }
+                if (!stderrFileObj.isAbsolute()) stderrFileObj = new File(currentDirectory, stderrFile);
                 try {
                     File parent = stderrFileObj.getParentFile();
-                    if (parent != null && !parent.exists()) {
-                        parent.mkdirs();
-                    }
+                    if (parent != null && !parent.exists()) parent.mkdirs();
                     errStream = new PrintStream(new FileOutputStream(stderrFileObj, isStderrAppend));
                 } catch (IOException e) {
                     System.err.println("Shell redirection error: " + e.getMessage());
@@ -122,7 +161,6 @@ public class Main {
                 }
             }
 
-            // Command router execution block
             try {
                 String command = cmdArgs.get(0);
 
@@ -131,33 +169,25 @@ public class Main {
                 } else if (command.equals("echo")) {
                     for (int i = 1; i < cmdArgs.size(); i++) {
                         outStream.print(cmdArgs.get(i));
-                        if (i < cmdArgs.size() - 1) {
-                            outStream.print(" ");
-                        }
+                        if (i < cmdArgs.size() - 1) outStream.print(" ");
                     }
                     outStream.println();
                 } else if (command.equals("pwd")) {
                     outStream.println(currentDirectory);
                 } else if (command.equals("jobs")) {
-                    // Empty implementation for this stage - produces no output
+                    // Empty 
                 } else if (command.equals("cd")) {
                     if (cmdArgs.size() < 2) {
                         String home = System.getenv("HOME");
-                        if (home != null) {
-                            currentDirectory = home;
-                        }
+                        if (home != null) currentDirectory = home;
                     } else {
                         String path = cmdArgs.get(1);
                         if (path.equals("~")) {
                             String home = System.getenv("HOME");
-                            if (home != null) {
-                                currentDirectory = home;
-                            }
+                            if (home != null) currentDirectory = home;
                         } else {
                             File targetDir = new File(path);
-                            if (!targetDir.isAbsolute()) {
-                                targetDir = new File(currentDirectory, path);
-                            }
+                            if (!targetDir.isAbsolute()) targetDir = new File(currentDirectory, path);
                             if (targetDir.exists() && targetDir.isDirectory()) {
                                 currentDirectory = targetDir.getCanonicalPath();
                             } else {
@@ -168,7 +198,7 @@ public class Main {
                 } else if (command.equals("type")) {
                     if (cmdArgs.size() >= 2) {
                         String target = cmdArgs.get(1);
-                        if (target.equals("echo") || target.equals("exit") || target.equals("pwd") || target.equals("cd") || target.equals("type") || target.equals("jobs")) {
+                        if (BUILTINS.contains(target)) {
                             outStream.println(target + " is a shell builtin");
                         } else {
                             String execPath = findInPath(target);
@@ -180,36 +210,24 @@ public class Main {
                         }
                     }
                 } else {
-                    // External Executable Command Processing
                     String execPath = findInPath(command);
                     if (execPath == null) {
                         outStream.println(command + ": not found");
                     } else {
                         ProcessBuilder pb = new ProcessBuilder(cmdArgs);
                         pb.directory(new File(currentDirectory));
-                        
-                        // Handle standard output stream redirection/appending
                         if (hasStdoutRedirect) {
-                            if (isStdoutAppend) {
-                                pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
-                            } else {
-                                pb.redirectOutput(stdoutFileObj);
-                            }
+                            if (isStdoutAppend) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutFileObj));
+                            else pb.redirectOutput(stdoutFileObj);
                         } else {
                             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                         }
-                        
-                        // Handle standard error stream redirection/appending
                         if (hasStderrRedirect) {
-                            if (isStderrAppend) {
-                                pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
-                            } else {
-                                pb.redirectError(stderrFileObj);
-                            }
+                            if (isStderrAppend) pb.redirectError(ProcessBuilder.Redirect.appendTo(stderrFileObj));
+                            else pb.redirectError(stderrFileObj);
                         } else {
                             pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                         }
-                        
                         Process process = pb.start();
                         process.waitFor();
                     }
@@ -217,13 +235,8 @@ public class Main {
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                // Safely close file streams to unlock files and flush outputs to disk
-                if (hasStdoutRedirect && outStream != System.out && outStream != null) {
-                    outStream.close();
-                }
-                if (hasStderrRedirect && errStream != System.err && errStream != null) {
-                    errStream.close();
-                }
+                if (hasStdoutRedirect && outStream != System.out && outStream != null) outStream.close();
+                if (hasStderrRedirect && errStream != System.err && errStream != null) errStream.close();
             }
         }
     }
@@ -238,11 +251,8 @@ public class Main {
             char c = input.charAt(i);
 
             if (inSingleQuote) {
-                if (c == '\'') {
-                    inSingleQuote = false;
-                } else {
-                    currentToken.append(c);
-                }
+                if (c == '\'') inSingleQuote = false;
+                else currentToken.append(c);
             } else if (inDoubleQuote) {
                 if (c == '\\') {
                     if (i + 1 < input.length()) {
@@ -262,7 +272,6 @@ public class Main {
                     currentToken.append(c);
                 }
             } else {
-                // Outside any quote context
                 if (c == '\\') {
                     if (i + 1 < input.length()) {
                         currentToken.append(input.charAt(i + 1));
@@ -283,35 +292,35 @@ public class Main {
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i += 2; // Step over '1>>'
+                    i += 2;
                 } else if (c == '1' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_REDIRECT__");
-                    i++; // Step over '1>'
+                    i++;
                 } else if (c == '2' && i + 2 < input.length() && input.charAt(i + 1) == '>' && input.charAt(i + 2) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_APPEND__");
-                    i += 2; // Step over '2>>'
+                    i += 2;
                 } else if (c == '2' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDERR_REDIRECT__");
-                    i++; // Step over '2>'
+                    i++;
                 } else if (c == '>' && i + 1 < input.length() && input.charAt(i + 1) == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
                         currentToken.setLength(0);
                     }
                     tokens.add("__STDOUT_APPEND__");
-                    i++; // Step over second '>'
+                    i++;
                 } else if (c == '>') {
                     if (currentToken.length() > 0) {
                         tokens.add(currentToken.toString());
